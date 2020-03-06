@@ -62,7 +62,7 @@ fn check(filename: &str) {
 }
 
 fn parse(file: &str) {
-    match types::test("~A&B->C") {
+    match types::test("~A & B -> C") {
         Ok((a, b)) => {
             println!("a: {}", a);
             println!("b: {}", b);

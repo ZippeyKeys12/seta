@@ -32,9 +32,9 @@ pub struct PrattParser<'r, T> {
 }
 
 impl<'r, T> PrattParser<'r, T> {
-    pub fn type_expr<'a>(&self, input: &'a str, precedence: u16) -> IResult<&'a str, T> {
+    pub fn expression<'a>(&self, input: &'a str, precedence: u16) -> IResult<&'a str, T> {
         for (tokenizer, parser) in self.prefixes {
-            let res = delimited(space0, tokenizer, space0)(input);
+            let res = tokenizer(input);
 
             if res.is_ok() {
                 let (input, token) = res?;
@@ -42,7 +42,7 @@ impl<'r, T> PrattParser<'r, T> {
 
                 while precedence < self.get_precedence(linput) {
                     for (prec, tokenizer, parser) in self.mixfixes {
-                        let res = delimited(space0, tokenizer, space0)(linput);
+                        let res = tokenizer(linput);
 
                         if res.is_ok() {
                             let (input, token) = res?;

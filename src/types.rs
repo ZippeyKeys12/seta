@@ -7,7 +7,7 @@ extern crate nom;
 use nom::{
     branch::alt,
     bytes::complete::{is_a, tag, take_until},
-    character::complete::one_of,
+    character::complete::space0,
     error::context,
     sequence::{delimited, tuple},
     IResult,
@@ -43,17 +43,23 @@ macro_rules! symbol {
     };
 }
 
+macro_rules! padded_symbol {
+    ($x:tt) => {
+        |i| delimited(space0, tag($x), space0)(i)
+    };
+}
+
 pub fn test(input: &str) -> IResult<&str, Box<ShapeType>> {
     let parser = PrattParser::<Box<ShapeType>> {
         prefixes: &vec![(symbol!("~"), prefix_expr), (identifier, literal_expr)],
         mixfixes: &vec![
-            (100, symbol!("&"), infix_expr),
-            (90, symbol!("|"), infix_expr),
-            (80, symbol!("->"), infix_expr),
+            (100, padded_symbol!("&"), infix_expr),
+            (90, padded_symbol!("|"), infix_expr),
+            (80, padded_symbol!("->"), infix_expr),
         ],
     };
 
-    parser.type_expr(input, 0)
+    parser.expression(input, 0)
 }
 
 fn literal_expr<'a>(
@@ -76,7 +82,7 @@ fn prefix_expr<'a>(
 ) -> IResult<&'a str, Box<ShapeType>> {
     match token {
         "~" => {
-            let (input, shape) = parser.type_expr(input, MAX_PRECEDENCE)?;
+            let (input, shape) = parser.expression(input, MAX_PRECEDENCE)?;
             Ok((input, Box::new(ShapeType::Negation(shape))))
         }
 
@@ -96,17 +102,17 @@ fn infix_expr<'a>(
 ) -> IResult<&'a str, Box<ShapeType>> {
     match token {
         "->" => {
-            let (input, shape) = parser.type_expr(input, precedence)?;
+            let (input, shape) = parser.expression(input, precedence)?;
             Ok((input, Box::new(ShapeType::Function(left, shape))))
         }
 
         "&" => {
-            let (input, shape) = parser.type_expr(input, precedence)?;
+            let (input, shape) = parser.expression(input, precedence)?;
             Ok((input, Box::new(ShapeType::Intersection(left, shape))))
         }
 
         "|" => {
-            let (input, shape) = parser.type_expr(input, precedence)?;
+            let (input, shape) = parser.expression(input, precedence)?;
             Ok((input, Box::new(ShapeType::Union(left, shape))))
         }
 
