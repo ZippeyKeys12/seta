@@ -1,0 +1,19 @@
+---
+name = "Sample File"
+author = "Zain Aamer <zippeykeys12@gmail.com>"
+desc = """
+    This file should use every feature in Seta, in order to provide a reference
+    for both parser development and future design changes.
+"""
+---
+
+@decorator
+@decorator_with_args(10)
+fun main(args: Array<Str>[len < 5]{_}) -> Int
+    ---
+    args: Command Line Arguments
+    return: Exit Code
+    ---
+
+    1
+end
