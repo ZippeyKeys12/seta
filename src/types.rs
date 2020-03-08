@@ -1,17 +1,10 @@
 use crate::general::identifier;
 use crate::pratt::{PrattParser, MAX_PRECEDENCE};
 
-use std::{collections::HashMap, fmt};
+use std::fmt;
 
 extern crate nom;
-use nom::{
-    branch::alt,
-    bytes::complete::{is_a, tag, take_until},
-    character::complete::space0,
-    error::context,
-    sequence::{delimited, tuple},
-    IResult,
-};
+use nom::{bytes::complete::tag, character::complete::space0, sequence::delimited, IResult};
 
 pub enum ShapeType {
     Negation(Box<ShapeType>),
@@ -35,18 +28,6 @@ impl fmt::Display for ShapeType {
 
 pub struct RecordType {
     name: String,
-}
-
-macro_rules! symbol {
-    ($x: tt) => {
-        |i| tag($x)(i)
-    };
-}
-
-macro_rules! padded_symbol {
-    ($x:tt) => {
-        |i| delimited(space0, tag($x), space0)(i)
-    };
 }
 
 pub fn test(input: &str) -> IResult<&str, Box<ShapeType>> {

@@ -1,14 +1,5 @@
-use std::fmt;
-
 extern crate nom;
-use nom::{
-    branch::alt,
-    bytes::complete::{is_a, tag, take_until},
-    character::complete::{one_of, space0},
-    error::context,
-    sequence::{delimited, tuple},
-    IResult,
-};
+use nom::IResult;
 
 pub const MAX_PRECEDENCE: u16 = u16::max_value();
 

@@ -6,13 +6,13 @@ use clap::{App, Arg, SubCommand};
 
 extern crate nom;
 use nom::{
-    branch::alt,
     bytes::complete::{tag, take_until},
     error::context,
-    sequence::{delimited, tuple},
+    sequence::delimited,
     IResult,
 };
 
+#[macro_use]
 mod general;
 mod pratt;
 mod types;
@@ -62,14 +62,16 @@ fn check(filename: &str) {
 }
 
 fn parse(file: &str) {
-    match types::test("~A & B -> C") {
-        Ok((a, b)) => {
-            println!("a: {}", a);
-            println!("b: {}", b);
-        }
+    docstring(file);
 
-        Err(e) => println!("{}", e),
-    }
+    // match r {
+    //     Ok((a, b)) => {
+    //         println!("a: {}", a);
+    //         println!("b: {}", b);
+    //     }
+
+    //     Err(e) => println!("{}", e),
+    // }
 }
 
 fn docstring(input: &str) -> IResult<&str, toml::Value> {
