@@ -1,7 +1,10 @@
 use crate::general::identifier;
 use crate::pratt::{PrattParser, MAX_PRECEDENCE};
+use crate::types::Type;
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
+
+use rayon::prelude::*;
 
 extern crate nom;
 use nom::{bytes::complete::tag, character::complete::space0, sequence::delimited, IResult};
@@ -11,7 +14,8 @@ pub enum ShapeType {
     Intersection(Box<ShapeType>, Box<ShapeType>),
     Union(Box<ShapeType>, Box<ShapeType>),
     Function(Box<ShapeType>, Box<ShapeType>),
-    Literal(Box<RecordType>),
+    // Name(Box<RecordType>),
+    Literal(HashMap<String, Type>),
 }
 
 impl fmt::Display for ShapeType {
@@ -21,40 +25,50 @@ impl fmt::Display for ShapeType {
             ShapeType::Intersection(op1, op2) => write!(f, "({} & {})", op1, op2),
             ShapeType::Union(op1, op2) => write!(f, "({} | {})", op1, op2),
             ShapeType::Function(op1, op2) => write!(f, "({} -> {})", op1, op2),
-            ShapeType::Literal(rec) => write!(f, "({})", rec.name),
+            // ShapeType::Name(rec) => write!(f, "({})", rec.name),
+            ShapeType::Literal(map) => write!(
+                f,
+                "{{ {} }}",
+                map.par_iter().map(|(k, _)| format!("{}", k)).reduce(
+                    || String::new(),
+                    |mut a: String, b: String| {
+                        a.push_str(&b);
+                        a
+                    }
+                )
+            ),
         }
     }
 }
 
-pub struct RecordType {
-    name: String,
-}
-
-pub fn test(input: &str) -> IResult<&str, Box<ShapeType>> {
+pub fn shape_expr(input: &str) -> IResult<&str, Box<ShapeType>> {
     let parser = PrattParser::<Box<ShapeType>> {
-        prefixes: &vec![(symbol!("~"), prefix_expr), (identifier, literal_expr)],
+        prefixes: &vec![
+            (|i| ws!(tag("~"))(i), prefix_expr),
+            // (identifier, name_expr)
+        ],
         mixfixes: &vec![
-            (100, padded_symbol!("&"), infix_expr),
-            (90, padded_symbol!("|"), infix_expr),
-            (80, padded_symbol!("->"), infix_expr),
+            (100, |i| ws!(tag("&"))(i), infix_expr),
+            (90, |i| ws!(tag("|"))(i), infix_expr),
+            (80, |i| ws!(tag("->"))(i), infix_expr),
         ],
     };
 
     parser.expression(input, 0)
 }
 
-fn literal_expr<'a>(
-    _parser: &PrattParser<Box<ShapeType>>,
-    input: &'a str,
-    token: &'a str,
-) -> IResult<&'a str, Box<ShapeType>> {
-    Ok((
-        input,
-        Box::new(ShapeType::Literal(Box::new(RecordType {
-            name: token.to_string(),
-        }))),
-    ))
-}
+// fn name_expr<'a>(
+//     _parser: &PrattParser<Box<ShapeType>>,
+//     input: &'a str,
+//     token: &'a str,
+// ) -> IResult<&'a str, Box<ShapeType>> {
+//     Ok((
+//         input,
+//         Box::new(ShapeType::Literal(Box::new(RecordType {
+//             name: token.to_string(),
+//         }))),
+//     ))
+// }
 
 fn prefix_expr<'a>(
     parser: &PrattParser<Box<ShapeType>>,

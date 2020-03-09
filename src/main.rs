@@ -1,21 +1,18 @@
+#[macro_use]
+mod general;
+use crate::general::compilation_unit;
+
+mod docs;
+mod functions;
+mod pratt;
+mod types;
+mod util;
+
 use std::fs::File;
 use std::io::prelude::*;
 
 extern crate clap;
 use clap::{App, Arg, SubCommand};
-
-extern crate nom;
-use nom::{
-    bytes::complete::{tag, take_until},
-    error::context,
-    sequence::delimited,
-    IResult,
-};
-
-#[macro_use]
-mod general;
-mod pratt;
-mod types;
 
 fn main() {
     let app_m = App::new("Seta")
@@ -62,7 +59,7 @@ fn check(filename: &str) {
 }
 
 fn parse(file: &str) {
-    docstring(file);
+    compilation_unit(file);
 
     // match r {
     //     Ok((a, b)) => {
@@ -72,14 +69,4 @@ fn parse(file: &str) {
 
     //     Err(e) => println!("{}", e),
     // }
-}
-
-fn docstring(input: &str) -> IResult<&str, toml::Value> {
-    let (input, data) = delimited(
-        tag("---"),
-        take_until("---"),
-        context("End of docstring", tag("---")),
-    )(input)?;
-
-    Ok((input, data.parse::<toml::Value>().unwrap()))
 }
