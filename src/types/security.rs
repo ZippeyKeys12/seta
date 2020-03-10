@@ -1,7 +1,7 @@
 use crate::general::identifier;
 
 use std::iter::FromIterator;
-use std::{cmp::Eq, collections::HashSet, fmt};
+use std::{collections::HashSet, fmt};
 
 use nom::{bytes::complete::tag, multi::separated_list, sequence::delimited, IResult};
 

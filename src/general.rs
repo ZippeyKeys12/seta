@@ -1,5 +1,6 @@
 use crate::docs::docstring;
 
+extern crate nom;
 use nom::{character::complete::alpha1, combinator::opt, IResult};
 
 pub fn compilation_unit(input: &str) -> IResult<&str, ()> {
@@ -14,6 +15,10 @@ pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 
 macro_rules! ws {
     ($x: expr) => {
-        delimited(space0, $x, space0)
+        nom::sequence::delimited(
+            nom::character::complete::space0,
+            $x,
+            nom::character::complete::space0,
+        )
     };
 }
