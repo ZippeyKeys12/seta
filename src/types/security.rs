@@ -29,11 +29,15 @@ impl fmt::Display for SecurityType {
             SecurityType::Literal(classes) => {
                 if let Err(a) = write!(
                     f,
-                    "{{ {} }}",
+                    "{}",
                     classes.iter().map(|c| c.clone()).fold(
                         String::new(),
                         |mut a: String, b: String| {
-                            a.push_str(&b);
+                            if a.is_empty() {
+                                a.push_str(&b)
+                            } else {
+                                a.push_str(&format!(", {}", b))
+                            };
                             a
                         }
                     )
@@ -57,13 +61,9 @@ impl fmt::Display for SecurityType {
 
 pub fn sec_type_expr(input: &str) -> IResult<&str, Box<SecurityType>> {
     let (input, list) = delimited(
-        tag("{"),
-        alt((
-            map(ws!(peek(tag("}"))), |x| Vec::new()),
-            map(ws!(tag("_")), |x| vec![x]),
-            separated_list(tag(","), ws!(identifier)),
-        )),
-        tag("}"),
+        ws!(tag("{")),
+        separated_list(ws!(tag(",")), ws!(alt((identifier, tag("_"))))),
+        ws!(tag("}")),
     )(input)?;
 
     let tmp = match list[..] {

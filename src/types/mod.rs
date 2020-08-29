@@ -28,7 +28,7 @@ impl fmt::Display for Type {
 
 pub fn type_expr(input: &str) -> IResult<&str, Box<Type>> {
     map(
-        tuple((shapes::shape_expr, opt(security::sec_type_expr))),
+        tuple((ws!(shapes::shape_expr), ws!(opt(security::sec_type_expr)))),
         |(shpe, sec)| {
             Box::new(Type {
                 shape: shpe,
