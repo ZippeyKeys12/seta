@@ -10,9 +10,10 @@ pub fn compilation_unit(input: &str) -> IResult<&str, ()> {
 }
 
 pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
-    alpha1(input)
+    alpha1(input) // Just letters
 }
 
+// Adds whitespace in between symbols
 macro_rules! ws {
     ($x: expr) => {
         nom::sequence::delimited(

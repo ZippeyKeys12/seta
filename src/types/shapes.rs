@@ -3,12 +3,14 @@ use crate::pratt::{PrattParser, MAX_PRECEDENCE};
 
 use std::{collections::HashMap, fmt};
 
-use rayon::prelude::*;
-
 extern crate nom;
 use nom::{
-    branch::alt, bytes::complete::tag, combinator::peek, multi::separated_list,
-    sequence::separated_pair, IResult,
+    branch::alt,
+    bytes::complete::tag,
+    combinator::peek,
+    multi::separated_list,
+    sequence::{delimited, separated_pair},
+    IResult,
 };
 
 pub enum ShapeType {
@@ -17,42 +19,50 @@ pub enum ShapeType {
     Union(Box<ShapeType>, Box<ShapeType>),
     Function(Box<ShapeType>, Box<ShapeType>),
     RecordLiteral(HashMap<String, Box<ShapeType>>),
-    TupleLiteral(HashMap<String, Box<ShapeType>>),
+    TupleLiteral(Vec<Box<ShapeType>>),
+    Reference(String),
 }
 
 impl fmt::Display for ShapeType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            ShapeType::Negation(op) => write!(f, "(~{})", op),
+            ShapeType::Negation(op) => write!(f, "~{}", op),
             ShapeType::Intersection(op1, op2) => write!(f, "({} & {})", op1, op2),
             ShapeType::Union(op1, op2) => write!(f, "({} | {})", op1, op2),
             ShapeType::Function(op1, op2) => write!(f, "({} -> {})", op1, op2),
-            // ShapeType::Name(rec) => write!(f, "({})", rec.name),
             ShapeType::RecordLiteral(map) => write!(
                 f,
-                "( {} )",
-                map.par_iter()
-                    .map(|(k, v)| format!("{}: {},", k, v))
-                    .reduce(
-                        || String::new(),
-                        |mut a: String, b: String| {
-                            a.push_str(&b);
-                            a
-                        }
-                    )
-            ),
-
-            ShapeType::TupleLiteral(map) => write!(
-                f,
-                "( {} )",
-                map.par_iter().map(|(_, v)| format!("{},", v)).reduce(
-                    || String::new(),
+                "({})",
+                // TODO: Use join when it's in stable
+                map.iter().map(|(k, v)| format!("{}: {}", k, v)).fold(
+                    String::new(),
                     |mut a: String, b: String| {
-                        a.push_str(&b);
+                        if a.is_empty() {
+                            a.push_str(&b)
+                        } else {
+                            a.push_str(&format!(", {}", b))
+                        };
                         a
                     }
                 )
             ),
+            ShapeType::TupleLiteral(map) => write!(
+                f,
+                "({})",
+                // TODO: Use join when it's in stable
+                map.iter().map(|v| v.to_string()).fold(
+                    String::new(),
+                    |mut a: String, b: String| {
+                        if a.is_empty() {
+                            a.push_str(&b)
+                        } else {
+                            a.push_str(&format!(", {}", b))
+                        };
+                        a
+                    }
+                )
+            ),
+            ShapeType::Reference(rec) => write!(f, "{}", rec),
         }
     }
 }
@@ -63,8 +73,15 @@ pub fn shape_expr(input: &str) -> IResult<&str, Box<ShapeType>> {
             (|i| ws!(tag("~"))(i), prefix_expr),
             (
                 |i| ws!(peek(tag("(")))(i),
-                |p, i, t| alt((|i2| record_expr(p, i2, t), |i2| tuple_expr(p, i2, t)))(i),
-            ), // (identifier, name_expr)
+                |p, i, t| {
+                    alt((
+                        |i2| parentheses(p, i2, t),
+                        |i2| record_expr(p, i2, t),
+                        |i2| tuple_expr(p, i2, t),
+                    ))(i)
+                },
+            ),
+            (identifier, reference_expr),
         ],
         mixfixes: &vec![
             (100, |i| ws!(tag("&"))(i), infix_expr),
@@ -73,38 +90,44 @@ pub fn shape_expr(input: &str) -> IResult<&str, Box<ShapeType>> {
         ],
     };
 
-    parser.expression(input, 0)
+    parser.parse(input)
 }
 
-// fn name_expr<'a>(
-//     _parser: &PrattParser<Box<ShapeType>>,
-//     input: &'a str,
-//     token: &'a str,
-// ) -> IResult<&'a str, Box<ShapeType>> {
-//     Ok((
-//         input,
-//         Box::new(ShapeType::Literal(Box::new(RecordType {
-//             name: token.to_string(),
-//         }))),
-//     ))
-// }
+fn reference_expr<'a>(
+    _parser: &PrattParser<Box<ShapeType>>,
+    input: &'a str,
+    token: &'a str,
+) -> IResult<&'a str, Box<ShapeType>> {
+    Ok((input, Box::new(ShapeType::Reference(token.to_string()))))
+}
+
+fn parentheses<'a>(
+    parser: &PrattParser<Box<ShapeType>>,
+    input: &'a str,
+    token: &'a str,
+) -> IResult<&'a str, Box<ShapeType>> {
+    delimited(ws!(tag("(")), |i| parser.parse(i), ws!(tag(")")))(input)
+}
 
 fn tuple_expr<'a>(
     parser: &PrattParser<Box<ShapeType>>,
     input: &'a str,
     token: &'a str,
 ) -> IResult<&'a str, Box<ShapeType>> {
-    let (input, vals) = separated_list(tag(","), |i| parser.expression(i, 0))(input)?;
+    let (input, vals) = delimited(
+        ws!(tag("(")),
+        separated_list(ws!(tag(",")), |i| parser.parse(i)),
+        ws!(tag(")")),
+    )(input)?;
 
-    let mut map = HashMap::<String, Box<ShapeType>>::new();
-
-    let mut i = 0;
-    for v in vals {
-        map.insert("val".to_string() + &i.to_string(), v);
-        i += 1;
+    if vals.is_empty() {
+        return Err(nom::Err::Error((
+            "Empty Tuple (This should never be seen)",
+            nom::error::ErrorKind::Alt,
+        )));
     }
 
-    Ok((input, Box::new(ShapeType::TupleLiteral(map))))
+    Ok((input, Box::new(ShapeType::TupleLiteral(vals))))
 }
 
 fn record_expr<'a>(
@@ -112,12 +135,23 @@ fn record_expr<'a>(
     input: &'a str,
     token: &'a str,
 ) -> IResult<&'a str, Box<ShapeType>> {
-    let (input, pairs) = separated_list(
-        tag(","),
-        separated_pair(identifier, tag(":"), |i| parser.expression(i, 0)),
+    let (input, pairs) = delimited(
+        ws!(tag("(")),
+        separated_list(
+            ws!(tag(",")),
+            separated_pair(identifier, ws!(tag(":")), |i| parser.parse(i)),
+        ),
+        ws!(tag(")")),
     )(input)?;
 
-    let mut map = HashMap::<String, Box<ShapeType>>::new();
+    if pairs.is_empty() {
+        return Err(nom::Err::Error((
+            "Empty Record (This should never be seen)",
+            nom::error::ErrorKind::Alt,
+        )));
+    }
+
+    let mut map = HashMap::<String, Box<ShapeType>>::with_capacity(pairs.len());
 
     for (k, v) in pairs {
         map.insert(k.to_string(), v);
@@ -153,17 +187,17 @@ fn infix_expr<'a>(
 ) -> IResult<&'a str, Box<ShapeType>> {
     match token {
         "->" => {
-            let (input, shape) = parser.expression(input, precedence)?;
+            let (input, shape) = parser.expression(input, precedence - 1)?;
             Ok((input, Box::new(ShapeType::Function(left, shape))))
         }
 
         "&" => {
-            let (input, shape) = parser.expression(input, precedence)?;
+            let (input, shape) = parser.expression(input, precedence - 1)?;
             Ok((input, Box::new(ShapeType::Intersection(left, shape))))
         }
 
         "|" => {
-            let (input, shape) = parser.expression(input, precedence)?;
+            let (input, shape) = parser.expression(input, precedence - 1)?;
             Ok((input, Box::new(ShapeType::Union(left, shape))))
         }
 

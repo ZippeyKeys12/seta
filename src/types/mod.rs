@@ -3,19 +3,21 @@ use crate::general::identifier;
 mod security;
 mod shapes;
 
+use security::SecurityType;
+
 use std::{collections::HashMap, fmt, iter::FromIterator};
 
 use nom::{
     bytes::complete::tag,
-    combinator::map,
-    multi::separated_list,
+    combinator::{map, opt},
+    multi::{many_m_n, separated_list},
     sequence::{separated_pair, tuple},
     IResult,
 };
 
 pub struct Type {
     shape: Box<shapes::ShapeType>,
-    security: Box<security::SecurityType>,
+    security: Box<SecurityType>,
 }
 
 impl fmt::Display for Type {
@@ -26,11 +28,14 @@ impl fmt::Display for Type {
 
 pub fn type_expr(input: &str) -> IResult<&str, Box<Type>> {
     map(
-        tuple((shapes::shape_expr, security::sec_type_expr)),
+        tuple((shapes::shape_expr, opt(security::sec_type_expr))),
         |(shpe, sec)| {
             Box::new(Type {
                 shape: shpe,
-                security: sec,
+                security: match sec {
+                    Some(s) => s,
+                    None => Box::new(SecurityType::Top),
+                },
             })
         },
     )(input)

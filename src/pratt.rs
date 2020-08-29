@@ -23,6 +23,10 @@ pub struct PrattParser<'r, T> {
 }
 
 impl<'r, T> PrattParser<'r, T> {
+    pub fn parse<'a>(&self, input: &'a str) -> IResult<&'a str, T> {
+        self.expression(input, 0)
+    }
+
     pub fn expression<'a>(&self, input: &'a str, precedence: u16) -> IResult<&'a str, T> {
         for (tokenizer, parser) in self.prefixes {
             let res = tokenizer(input);
