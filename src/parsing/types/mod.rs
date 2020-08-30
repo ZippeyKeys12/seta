@@ -1,7 +1,7 @@
-use crate::general::identifier;
+use crate::parsing::general::identifier;
 
-mod security;
-mod shapes;
+pub mod security;
+pub mod shapes;
 
 use security::SecurityType;
 
@@ -10,14 +10,14 @@ use std::{collections::HashMap, fmt, iter::FromIterator};
 use nom::{
     bytes::complete::tag,
     combinator::{map, opt},
-    multi::{many_m_n, separated_list},
+    multi::separated_list,
     sequence::{separated_pair, tuple},
     IResult,
 };
 
 pub struct Type {
-    shape: Box<shapes::ShapeType>,
-    security: Box<SecurityType>,
+    pub shape: Box<shapes::ShapeType>,
+    pub security: Box<SecurityType>,
 }
 
 impl fmt::Display for Type {

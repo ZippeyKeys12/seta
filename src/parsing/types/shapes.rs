@@ -1,5 +1,7 @@
-use crate::general::identifier;
-use crate::pratt::{PrattParser, MAX_PRECEDENCE};
+use crate::parsing::{
+    general::identifier,
+    pratt::{PrattParser, MAX_PRECEDENCE},
+};
 
 use std::{collections::HashMap, fmt};
 
@@ -104,7 +106,7 @@ fn reference_expr<'a>(
 fn parentheses<'a>(
     parser: &PrattParser<Box<ShapeType>>,
     input: &'a str,
-    token: &'a str,
+    _token: &'a str,
 ) -> IResult<&'a str, Box<ShapeType>> {
     delimited(ws!(tag("(")), |i| parser.parse(i), ws!(tag(")")))(input)
 }
@@ -112,7 +114,7 @@ fn parentheses<'a>(
 fn tuple_expr<'a>(
     parser: &PrattParser<Box<ShapeType>>,
     input: &'a str,
-    token: &'a str,
+    _token: &'a str,
 ) -> IResult<&'a str, Box<ShapeType>> {
     let (input, vals) = delimited(
         ws!(tag("(")),
@@ -133,7 +135,7 @@ fn tuple_expr<'a>(
 fn record_expr<'a>(
     parser: &PrattParser<Box<ShapeType>>,
     input: &'a str,
-    token: &'a str,
+    _token: &'a str,
 ) -> IResult<&'a str, Box<ShapeType>> {
     let (input, pairs) = delimited(
         ws!(tag("(")),

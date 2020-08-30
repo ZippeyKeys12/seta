@@ -1,4 +1,4 @@
-use crate::general::identifier;
+use crate::parsing::general::identifier;
 
 use std::{collections::HashSet, fmt, iter::FromIterator};
 
