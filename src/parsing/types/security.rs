@@ -24,17 +24,17 @@ impl fmt::Display for SecurityType {
                 if let Err(a) = write!(
                     f,
                     "{}",
-                    classes.iter().map(|c| c.clone()).fold(
-                        String::new(),
-                        |mut a: String, b: String| {
+                    classes
+                        .iter()
+                        .cloned()
+                        .fold(String::new(), |mut a: String, b: String| {
                             if a.is_empty() {
                                 a.push_str(&b)
                             } else {
                                 a.push_str(&format!(", {}", b))
                             };
                             a
-                        }
-                    )
+                        })
                 ) {
                     return Err(a);
                 }

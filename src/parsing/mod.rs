@@ -15,8 +15,8 @@ use nom::{combinator::opt, multi::many0, IResult};
 use functions::function_decl;
 
 pub fn compilation_unit(input: &str) -> IResult<&str, ()> {
-    let (input, file_doc) = opt(docstring)(input)?;
-    let (input, funcs) = many0(function_decl)(input).unwrap();
+    let (input, _file_doc) = opt(docstring)(input)?;
+    let (input, _funcs) = many0(function_decl)(input).unwrap();
 
     Ok((input, ()))
 }

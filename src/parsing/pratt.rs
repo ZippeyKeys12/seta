@@ -3,23 +3,22 @@ use nom::IResult;
 
 pub const MAX_PRECEDENCE: u16 = u16::max_value();
 
-pub struct PrattParser<'r, T> {
-    pub prefixes: &'r Vec<(
-        for<'a> fn(input: &'a str) -> IResult<&'a str, &'a str>,
-        for<'a> fn(parser: &Self, input: &'a str, token: &'a str) -> IResult<&'a str, T>,
-    )>,
+type Tokenizer = for<'a> fn(input: &'a str) -> IResult<&'a str, &'a str>;
 
-    pub mixfixes: &'r Vec<(
-        u16,
-        for<'a> fn(input: &'a str) -> IResult<&'a str, &'a str>,
-        for<'a> fn(
-            parser: &Self,
-            input: &'a str,
-            left: T,
-            token: &'a str,
-            precendence: u16,
-        ) -> IResult<&'a str, T>,
-    )>,
+type PrefixOpParser<S, T> =
+    for<'a> fn(parser: &S, input: &'a str, token: &'a str) -> IResult<&'a str, T>;
+
+type MixfixOpParser<S, T> = for<'a> fn(
+    parser: &S,
+    input: &'a str,
+    left: T,
+    token: &'a str,
+    precendence: u16,
+) -> IResult<&'a str, T>;
+
+pub struct PrattParser<'r, T> {
+    pub prefixes: &'r Vec<(Tokenizer, PrefixOpParser<Self, T>)>,
+    pub mixfixes: &'r Vec<(u16, Tokenizer, MixfixOpParser<Self, T>)>,
 }
 
 impl<'r, T> PrattParser<'r, T> {
@@ -67,6 +66,6 @@ impl<'r, T> PrattParser<'r, T> {
             }
         }
 
-        return 0;
+        0
     }
 }

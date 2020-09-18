@@ -15,13 +15,14 @@ use nom::{
     IResult,
 };
 
+#[derive(Clone)]
 pub enum ShapeType {
     Negation(Box<ShapeType>),
     Intersection(Box<ShapeType>, Box<ShapeType>),
     Union(Box<ShapeType>, Box<ShapeType>),
     Function(Box<ShapeType>, Box<ShapeType>),
-    RecordLiteral(HashMap<String, Box<ShapeType>>),
-    TupleLiteral(Vec<Box<ShapeType>>),
+    RecordLiteral(HashMap<String, ShapeType>),
+    TupleLiteral(Vec<ShapeType>),
     Reference(String),
 }
 
@@ -127,9 +128,15 @@ fn tuple_expr<'a>(
             "Empty Tuple (This should never be seen)",
             nom::error::ErrorKind::Alt,
         )));
+    };
+
+    let mut res: Vec<ShapeType> = Vec::with_capacity(vals.len());
+
+    for v in vals {
+        res.push(*v)
     }
 
-    Ok((input, Box::new(ShapeType::TupleLiteral(vals))))
+    Ok((input, Box::new(ShapeType::TupleLiteral(res))))
 }
 
 fn record_expr<'a>(
@@ -153,10 +160,10 @@ fn record_expr<'a>(
         )));
     }
 
-    let mut map = HashMap::<String, Box<ShapeType>>::with_capacity(pairs.len());
+    let mut map = HashMap::<String, ShapeType>::with_capacity(pairs.len());
 
     for (k, v) in pairs {
-        map.insert(k.to_string(), v);
+        map.insert(k.to_string(), *v);
     }
 
     Ok((input, Box::new(ShapeType::RecordLiteral(map))))

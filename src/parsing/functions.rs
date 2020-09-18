@@ -43,18 +43,19 @@ pub fn function_decl(input: &str) -> IResult<&str, Function> {
     Ok((
         input,
         Function {
-            doc: doc,
+            doc,
             name: name.to_string(),
             parameters: map,
             ret: (ret.0.to_string(), ret.1),
-            body: body,
+            body,
         },
     ))
 }
 
-pub fn function_sig(
-    input: &str,
-) -> IResult<&str, (&str, HashMap<&str, Box<Type>>, (&str, Box<Type>))> {
+type FunctionResult<'a> =
+    IResult<&'a str, (&'a str, HashMap<&'a str, Box<Type>>, (&'a str, Box<Type>))>;
+
+pub fn function_sig(input: &str) -> FunctionResult {
     tuple((
         ws!(preceded(ws!(tag("fn")), ws!(identifier))),
         // Parameters
