@@ -15,7 +15,8 @@ use nom::{
     IResult,
 };
 
-#[derive(Clone)]
+// TODO: Binary op order shouldn't matter
+#[derive(Clone, Debug, PartialEq)]
 pub enum ShapeType {
     Negation(Box<ShapeType>),
     Intersection(Box<ShapeType>, Box<ShapeType>),
@@ -86,6 +87,7 @@ pub fn shape_expr(input: &str) -> IResult<&str, Box<ShapeType>> {
             ),
             (identifier, reference_expr),
         ],
+
         mixfixes: &vec![
             (100, |i| ws!(tag("&"))(i), infix_expr),
             (90, |i| ws!(tag("|"))(i), infix_expr),
@@ -214,5 +216,81 @@ fn infix_expr<'a>(
             "Unknown type operator",
             nom::error::ErrorKind::Alt,
         ))),
+    }
+}
+
+// TODO: Precedence tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_literal() {
+        let (i, t) = shape_expr("A").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(*t, ShapeType::Reference("A".to_string()))
+    }
+
+    #[test]
+    fn test_intersection() {
+        let (i, t) = shape_expr("A & B").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            *t,
+            ShapeType::Intersection(
+                Box::new(ShapeType::Reference("A".to_string())),
+                Box::new(ShapeType::Reference("B".to_string()))
+            )
+        )
+    }
+
+    #[test]
+    fn test_union() {
+        let (i, t) = shape_expr("A | B").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            *t,
+            ShapeType::Union(
+                Box::new(ShapeType::Reference("A".to_string())),
+                Box::new(ShapeType::Reference("B".to_string()))
+            )
+        )
+    }
+
+    #[test]
+    fn test_function() {
+        let (i, t) = shape_expr("A -> B").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            *t,
+            ShapeType::Function(
+                Box::new(ShapeType::Reference("A".to_string())),
+                Box::new(ShapeType::Reference("B".to_string()))
+            )
+        )
+    }
+
+    #[test]
+    fn test_record_literal() {
+        let (i, t) = shape_expr("(a: A, b: B)").unwrap();
+        assert_eq!(i, "");
+
+        let mut tmp = HashMap::new();
+        tmp.insert("a".to_string(), ShapeType::Reference("A".to_string()));
+        tmp.insert("b".to_string(), ShapeType::Reference("B".to_string()));
+
+        assert_eq!(*t, ShapeType::RecordLiteral(tmp))
+    }
+
+    #[test]
+    fn test_tuple_literal() {
+        let (i, t) = shape_expr("(A, B)").unwrap();
+        assert_eq!(i, "");
+
+        let mut tmp = Vec::with_capacity(2);
+        tmp.push(ShapeType::Reference("A".to_string()));
+        tmp.push(ShapeType::Reference("B".to_string()));
+
+        assert_eq!(*t, ShapeType::TupleLiteral(tmp))
     }
 }
