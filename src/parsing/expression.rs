@@ -19,11 +19,17 @@ use regex::Regex;
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     IntLiteral(i32),
+    Negation(Box<Expression>),
+    Inversion(Box<Expression>),
+    Not(Box<Expression>),
 }
 
 pub fn val_expr(input: &str) -> IResult<&str, Box<Expression>> {
     let parser = PrattParser::<Box<Expression>> {
-        prefixes: &vec![(int_literal, int_expr)],
+        prefixes: &vec![
+            (int_literal, int_expr),
+            (|i| ws!(alt((tag("-"), tag("~"), tag("!"))))(i), prefix_expr),
+        ],
 
         mixfixes: &vec![],
     };
@@ -62,6 +68,34 @@ fn int_expr<'a>(
     ))
 }
 
+fn prefix_expr<'a>(
+    parser: &PrattParser<Box<Expression>>,
+    input: &'a str,
+    token: &'a str,
+) -> IResult<&'a str, Box<Expression>> {
+    match token {
+        "-" => {
+            let (input, shape) = parser.expression(input, MAX_PRECEDENCE)?;
+            Ok((input, Box::new(Expression::Negation(shape))))
+        }
+
+        "~" => {
+            let (input, shape) = parser.expression(input, MAX_PRECEDENCE)?;
+            Ok((input, Box::new(Expression::Inversion(shape))))
+        }
+
+        "!" => {
+            let (input, shape) = parser.expression(input, MAX_PRECEDENCE)?;
+            Ok((input, Box::new(Expression::Not(shape))))
+        }
+
+        _ => Result::Err(nom::Err::Error((
+            "Unknown type operator",
+            nom::error::ErrorKind::Alt,
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,5 +128,71 @@ mod tests {
     #[should_panic]
     fn test_int_literal_under() {
         let (_, _) = val_expr("-2147483649").unwrap();
+    }
+
+    #[test]
+    fn test_negation() {
+        let test_values = vec![
+            "--1234",
+            "--7864563",
+            "--2365464",
+            "--34636543",
+            "--2147483648",
+        ];
+
+        for test_val in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                Expression::Negation(Box::new(Expression::IntLiteral(
+                    test_val[1..].parse().unwrap()
+                )))
+            )
+        }
+    }
+
+    #[test]
+    fn test_inversion() {
+        let test_values = vec![
+            "~-1234",
+            "~-7864563",
+            "~-2365464",
+            "~-34636543",
+            "~-2147483648",
+        ];
+
+        for test_val in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                Expression::Inversion(Box::new(Expression::IntLiteral(
+                    test_val[1..].parse().unwrap()
+                )))
+            )
+        }
+    }
+
+    #[test]
+    fn test_not() {
+        let test_values = vec![
+            "!-1234",
+            "!-7864563",
+            "!-2365464",
+            "!-34636543",
+            "!-2147483648",
+        ];
+
+        for test_val in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                Expression::Not(Box::new(Expression::IntLiteral(
+                    test_val[1..].parse().unwrap()
+                )))
+            )
+        }
     }
 }
