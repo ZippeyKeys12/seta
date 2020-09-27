@@ -1,6 +1,6 @@
 use crate::parsing::{
     docs::docstring,
-    expression::{expression, Expression},
+    expression::{val_expr, Expression},
     general::identifier,
     types::{type_expr, type_spec, type_spec_list, Type},
 };
@@ -31,7 +31,7 @@ pub fn function_decl(input: &str) -> IResult<&str, Function> {
         ws!(opt(docstring)),
         ws!(function_sig),
         ws!(tag("=")),
-        ws!(expression),
+        ws!(val_expr),
     ))(input)?;
 
     let mut map = HashMap::<String, Box<Type>>::new();
