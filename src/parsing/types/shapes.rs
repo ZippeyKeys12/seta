@@ -203,12 +203,12 @@ fn infix_expr<'a>(
         }
 
         "&" => {
-            let (input, shape) = parser.expression(input, precedence - 1)?;
+            let (input, shape) = parser.expression(input, precedence)?;
             Ok((input, Box::new(ShapeType::Intersection(left, shape))))
         }
 
         "|" => {
-            let (input, shape) = parser.expression(input, precedence - 1)?;
+            let (input, shape) = parser.expression(input, precedence)?;
             Ok((input, Box::new(ShapeType::Union(left, shape))))
         }
 
