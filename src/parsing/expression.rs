@@ -22,6 +22,10 @@ pub enum Expression {
     Negation(Box<Expression>),
     Inversion(Box<Expression>),
     Not(Box<Expression>),
+    Addition(Box<Expression>, Box<Expression>),
+    Subtraction(Box<Expression>, Box<Expression>),
+    Multiplication(Box<Expression>, Box<Expression>),
+    Division(Box<Expression>, Box<Expression>),
 }
 
 pub fn val_expr(input: &str) -> IResult<&str, Box<Expression>> {
@@ -31,14 +35,17 @@ pub fn val_expr(input: &str) -> IResult<&str, Box<Expression>> {
             (|i| ws!(alt((tag("-"), tag("~"), tag("!"))))(i), prefix_expr),
         ],
 
-        mixfixes: &vec![],
+        mixfixes: &vec![
+            (100, |i| ws!(alt((tag("*"), tag("/"))))(i), infix_expr),
+            (90, |i| ws!(alt((tag("+"), tag("-"))))(i), infix_expr),
+        ],
     };
 
     parser.parse(input)
 }
 
 lazy_static! {
-    static ref INT_LITERAL_PATTERN: Regex = Regex::new(r"^-?[1-9]\d*(\s|$)").unwrap();
+    static ref INT_LITERAL_PATTERN: Regex = Regex::new(r"^\s*-?[1-9]\d*").unwrap();
 }
 
 fn int_literal<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
@@ -91,6 +98,41 @@ fn prefix_expr<'a>(
 
         _ => Result::Err(nom::Err::Error((
             "Unknown type operator",
+            nom::error::ErrorKind::Alt,
+        ))),
+    }
+}
+
+fn infix_expr<'a>(
+    parser: &PrattParser<Box<Expression>>,
+    input: &'a str,
+    left: Box<Expression>,
+    token: &'a str,
+    precedence: u16,
+) -> IResult<&'a str, Box<Expression>> {
+    match token {
+        "+" => {
+            let (input, expr) = parser.expression(input, precedence)?;
+            Ok((input, Box::new(Expression::Addition(left, expr))))
+        }
+
+        "-" => {
+            let (input, expr) = parser.expression(input, precedence)?;
+            Ok((input, Box::new(Expression::Subtraction(left, expr))))
+        }
+
+        "*" => {
+            let (input, expr) = parser.expression(input, precedence)?;
+            Ok((input, Box::new(Expression::Multiplication(left, expr))))
+        }
+
+        "/" => {
+            let (input, expr) = parser.expression(input, precedence)?;
+            Ok((input, Box::new(Expression::Division(left, expr))))
+        }
+
+        _ => Result::Err(nom::Err::Error((
+            "Unknown operator",
             nom::error::ErrorKind::Alt,
         ))),
     }
@@ -192,6 +234,94 @@ mod tests {
                 Expression::Not(Box::new(Expression::IntLiteral(
                     test_val[1..].parse().unwrap()
                 )))
+            )
+        }
+    }
+
+    #[test]
+    fn test_addition() {
+        let test_values = vec![
+            ("1+32", 1, 32),
+            ("5342+32435", 5342, 32435),
+            ("2365464+3564322", 2365464, 3564322),
+            ("1+200", 1, 200),
+        ];
+
+        for (test_val, a, b) in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                Expression::Addition(
+                    Box::new(Expression::IntLiteral(a)),
+                    Box::new(Expression::IntLiteral(b))
+                )
+            )
+        }
+    }
+
+    #[test]
+    fn test_subtraction() {
+        let test_values = vec![
+            ("1 - 32", 1, 32),
+            ("5342 - 32435", 5342, 32435),
+            ("2365464 - 3564322", 2365464, 3564322),
+            ("1 - 200", 1, 200),
+        ];
+
+        for (test_val, a, b) in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                Expression::Subtraction(
+                    Box::new(Expression::IntLiteral(a)),
+                    Box::new(Expression::IntLiteral(b))
+                )
+            )
+        }
+    }
+
+    #[test]
+    fn test_division() {
+        let test_values = vec![
+            ("1 / 32", 1, 32),
+            ("5342 / 32435", 5342, 32435),
+            ("2365464 / 3564322", 2365464, 3564322),
+            ("1 / 200", 1, 200),
+        ];
+
+        for (test_val, a, b) in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                Expression::Division(
+                    Box::new(Expression::IntLiteral(a)),
+                    Box::new(Expression::IntLiteral(b))
+                )
+            )
+        }
+    }
+
+    #[test]
+    fn test_multiplication() {
+        let test_values = vec![
+            ("1 * 32", 1, 32),
+            ("5342 * 32435", 5342, 32435),
+            ("2365464 * 3564322", 2365464, 3564322),
+            ("1 * 200", 1, 200),
+        ];
+
+        for (test_val, a, b) in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                Expression::Multiplication(
+                    Box::new(Expression::IntLiteral(a)),
+                    Box::new(Expression::IntLiteral(b))
+                )
             )
         }
     }

@@ -54,7 +54,7 @@ impl<'r, T> PrattParser<'r, T> {
         }
 
         Err(nom::Err::Error((
-            "No type expression found",
+            "No expression found",
             nom::error::ErrorKind::Alt,
         )))
     }
