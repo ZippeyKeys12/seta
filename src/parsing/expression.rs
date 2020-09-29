@@ -242,9 +242,9 @@ mod tests {
     fn test_addition() {
         let test_values = vec![
             ("1+32", 1, 32),
-            ("5342+32435", 5342, 32435),
-            ("2365464+3564322", 2365464, 3564322),
-            ("1+200", 1, 200),
+            ("5342 +32435", 5342, 32435),
+            ("2365464+ 3564322", 2365464, 3564322),
+            ("1 + 200", 1, 200),
         ];
 
         for (test_val, a, b) in test_values {
@@ -263,9 +263,9 @@ mod tests {
     #[test]
     fn test_subtraction() {
         let test_values = vec![
-            ("1 - 32", 1, 32),
-            ("5342 - 32435", 5342, 32435),
-            ("2365464 - 3564322", 2365464, 3564322),
+            ("1-32", 1, 32),
+            ("5342 -32435", 5342, 32435),
+            ("2365464- 3564322", 2365464, 3564322),
             ("1 - 200", 1, 200),
         ];
 
@@ -283,33 +283,11 @@ mod tests {
     }
 
     #[test]
-    fn test_division() {
-        let test_values = vec![
-            ("1 / 32", 1, 32),
-            ("5342 / 32435", 5342, 32435),
-            ("2365464 / 3564322", 2365464, 3564322),
-            ("1 / 200", 1, 200),
-        ];
-
-        for (test_val, a, b) in test_values {
-            let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
-            assert_eq!(
-                *t,
-                Expression::Division(
-                    Box::new(Expression::IntLiteral(a)),
-                    Box::new(Expression::IntLiteral(b))
-                )
-            )
-        }
-    }
-
-    #[test]
     fn test_multiplication() {
         let test_values = vec![
-            ("1 * 32", 1, 32),
-            ("5342 * 32435", 5342, 32435),
-            ("2365464 * 3564322", 2365464, 3564322),
+            ("1*32", 1, 32),
+            ("5342 *32435", 5342, 32435),
+            ("2365464* 3564322", 2365464, 3564322),
             ("1 * 200", 1, 200),
         ];
 
@@ -319,6 +297,28 @@ mod tests {
             assert_eq!(
                 *t,
                 Expression::Multiplication(
+                    Box::new(Expression::IntLiteral(a)),
+                    Box::new(Expression::IntLiteral(b))
+                )
+            )
+        }
+    }
+
+    #[test]
+    fn test_division() {
+        let test_values = vec![
+            ("1/32", 1, 32),
+            ("5342 /32435", 5342, 32435),
+            ("2365464/ 3564322", 2365464, 3564322),
+            ("1 / 200", 1, 200),
+        ];
+
+        for (test_val, a, b) in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                Expression::Division(
                     Box::new(Expression::IntLiteral(a)),
                     Box::new(Expression::IntLiteral(b))
                 )
