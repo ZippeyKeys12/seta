@@ -11,7 +11,7 @@ use nom::{
     bytes::complete::tag,
     combinator::peek,
     multi::separated_list,
-    sequence::{delimited, separated_pair},
+    sequence::{delimited, separated_pair, terminated},
     IResult,
 };
 
@@ -76,7 +76,7 @@ pub fn shape_expr(input: &str) -> IResult<&str, Box<ShapeType>> {
         prefixes: &vec![
             (|i| ws!(tag("~"))(i), prefix_expr),
             (
-                |i| ws!(peek(tag("(")))(i),
+                |i| ws!(tag("("))(i),
                 |p, i, t| {
                     alt((
                         |i2| parentheses(p, i2, t),
@@ -111,7 +111,7 @@ fn parentheses<'a>(
     input: &'a str,
     _token: &'a str,
 ) -> IResult<&'a str, Box<ShapeType>> {
-    delimited(ws!(tag("(")), |i| parser.parse(i), ws!(tag(")")))(input)
+    terminated(|i| parser.parse(i), ws!(tag(")")))(input)
 }
 
 fn tuple_expr<'a>(
