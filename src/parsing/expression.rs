@@ -325,4 +325,56 @@ mod tests {
             )
         }
     }
+
+    #[test]
+    fn test_order_of_operations() {
+        let test_values = vec![
+            (
+                "41 * 64 + 29",
+                Expression::Addition(
+                    Box::new(Expression::Multiplication(
+                        Box::new(Expression::IntLiteral(41)),
+                        Box::new(Expression::IntLiteral(64)),
+                    )),
+                    Box::new(Expression::IntLiteral(29)),
+                ),
+            ),
+            (
+                "23 - 32 + 34",
+                Expression::Addition(
+                    Box::new(Expression::Subtraction(
+                        Box::new(Expression::IntLiteral(23)),
+                        Box::new(Expression::IntLiteral(32)),
+                    )),
+                    Box::new(Expression::IntLiteral(34)),
+                ),
+            ),
+            (
+                "57 / 78 * 31",
+                Expression::Multiplication(
+                    Box::new(Expression::Division(
+                        Box::new(Expression::IntLiteral(57)),
+                        Box::new(Expression::IntLiteral(78)),
+                    )),
+                    Box::new(Expression::IntLiteral(31)),
+                ),
+            ),
+            (
+                "43 - 67 * 97",
+                Expression::Subtraction(
+                    Box::new(Expression::IntLiteral(43)),
+                    Box::new(Expression::Multiplication(
+                        Box::new(Expression::IntLiteral(67)),
+                        Box::new(Expression::IntLiteral(97)),
+                    )),
+                ),
+            ),
+        ];
+
+        for (test_val, ans) in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(*t, ans)
+        }
+    }
 }
