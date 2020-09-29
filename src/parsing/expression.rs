@@ -9,7 +9,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::digit1,
     combinator::{map, opt},
-    sequence::{delimited, preceded, tuple},
+    sequence::{preceded, terminated, tuple},
     IResult,
 };
 
@@ -33,6 +33,7 @@ pub fn val_expr(input: &str) -> IResult<&str, Box<Expression>> {
         prefixes: &vec![
             (int_literal, int_expr),
             (|i| ws!(alt((tag("-"), tag("~"), tag("!"))))(i), prefix_expr),
+            (|i| ws!(tag("("))(i), parentheses),
         ],
 
         mixfixes: &vec![
@@ -73,6 +74,14 @@ fn int_expr<'a>(
         input,
         Box::new(Expression::IntLiteral(token.parse::<i32>().unwrap())),
     ))
+}
+
+fn parentheses<'a>(
+    parser: &PrattParser<Box<Expression>>,
+    input: &'a str,
+    _token: &'a str,
+) -> IResult<&'a str, Box<Expression>> {
+    terminated(|i| parser.parse(i), ws!(tag(")")))(input)
 }
 
 fn prefix_expr<'a>(
@@ -366,6 +375,39 @@ mod tests {
                     Box::new(Expression::Multiplication(
                         Box::new(Expression::IntLiteral(67)),
                         Box::new(Expression::IntLiteral(97)),
+                    )),
+                ),
+            ),
+            (
+                "76 - (21 + 34)",
+                Expression::Subtraction(
+                    Box::new(Expression::IntLiteral(76)),
+                    Box::new(Expression::Addition(
+                        Box::new(Expression::IntLiteral(21)),
+                        Box::new(Expression::IntLiteral(34)),
+                    )),
+                ),
+            ),
+            (
+                "45 / (87 * 12)",
+                Expression::Division(
+                    Box::new(Expression::IntLiteral(45)),
+                    Box::new(Expression::Multiplication(
+                        Box::new(Expression::IntLiteral(87)),
+                        Box::new(Expression::IntLiteral(12)),
+                    )),
+                ),
+            ),
+            (
+                "76 / (34 * (12 + 42))",
+                Expression::Division(
+                    Box::new(Expression::IntLiteral(76)),
+                    Box::new(Expression::Multiplication(
+                        Box::new(Expression::IntLiteral(34)),
+                        Box::new(Expression::Addition(
+                            Box::new(Expression::IntLiteral(12)),
+                            Box::new(Expression::IntLiteral(42)),
+                        )),
                     )),
                 ),
             ),
