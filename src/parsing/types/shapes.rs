@@ -119,8 +119,7 @@ fn tuple_expr<'a>(
     input: &'a str,
     _token: &'a str,
 ) -> IResult<&'a str, Box<ShapeType>> {
-    let (input, vals) = delimited(
-        ws!(tag("(")),
+    let (input, vals) = terminated(
         separated_list(ws!(tag(",")), |i| parser.parse(i)),
         ws!(tag(")")),
     )(input)?;
@@ -146,8 +145,7 @@ fn record_expr<'a>(
     input: &'a str,
     _token: &'a str,
 ) -> IResult<&'a str, Box<ShapeType>> {
-    let (input, pairs) = delimited(
-        ws!(tag("(")),
+    let (input, pairs) = terminated(
         separated_list(
             ws!(tag(",")),
             separated_pair(identifier, ws!(tag(":")), |i| parser.parse(i)),
@@ -233,64 +231,105 @@ mod tests {
 
     #[test]
     fn test_intersection() {
-        let (i, t) = shape_expr("A & B").unwrap();
-        assert_eq!(i, "");
-        assert_eq!(
-            *t,
-            ShapeType::Intersection(
-                Box::new(ShapeType::Reference("A".to_string())),
-                Box::new(ShapeType::Reference("B".to_string()))
+        let test_values = vec![
+            ("A&B", "A", "B"),
+            ("Bf &Cwer", "Bf", "Cwer"),
+            ("Dwr& Gfd", "Dwr", "Gfd"),
+            ("fgE & dglW", "fgE", "dglW"),
+        ];
+
+        for (test_val, a, b) in test_values {
+            let (i, t) = shape_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                ShapeType::Intersection(
+                    Box::new(ShapeType::Reference(a.to_string())),
+                    Box::new(ShapeType::Reference(b.to_string()))
+                )
             )
-        )
+        }
     }
 
     #[test]
     fn test_union() {
-        let (i, t) = shape_expr("A | B").unwrap();
-        assert_eq!(i, "");
-        assert_eq!(
-            *t,
-            ShapeType::Union(
-                Box::new(ShapeType::Reference("A".to_string())),
-                Box::new(ShapeType::Reference("B".to_string()))
+        let test_values = vec![
+            ("A|B", "A", "B"),
+            ("Bf |Cwer", "Bf", "Cwer"),
+            ("Dwr| Gfd", "Dwr", "Gfd"),
+            ("fgE | dglW", "fgE", "dglW"),
+        ];
+
+        for (test_val, a, b) in test_values {
+            let (i, t) = shape_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                ShapeType::Union(
+                    Box::new(ShapeType::Reference(a.to_string())),
+                    Box::new(ShapeType::Reference(b.to_string()))
+                )
             )
-        )
+        }
     }
 
     #[test]
     fn test_function() {
-        let (i, t) = shape_expr("A -> B").unwrap();
-        assert_eq!(i, "");
-        assert_eq!(
-            *t,
-            ShapeType::Function(
-                Box::new(ShapeType::Reference("A".to_string())),
-                Box::new(ShapeType::Reference("B".to_string()))
+        let test_values = vec![
+            ("A->B", "A", "B"),
+            ("Bf ->Cwer", "Bf", "Cwer"),
+            ("Dwr-> Gfd", "Dwr", "Gfd"),
+            ("fgE -> dglW", "fgE", "dglW"),
+        ];
+
+        for (test_val, a, b) in test_values {
+            let (i, t) = shape_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(
+                *t,
+                ShapeType::Function(
+                    Box::new(ShapeType::Reference(a.to_string())),
+                    Box::new(ShapeType::Reference(b.to_string()))
+                )
             )
-        )
+        }
     }
 
     #[test]
     fn test_record_literal() {
-        let (i, t) = shape_expr("(a: A, b: B)").unwrap();
-        assert_eq!(i, "");
+        let test_values = vec![
+            "(a:A,b:B)",
+            "(a:A , b:B)",
+            "(a :A,b :B)",
+            "(a : A,b : B)",
+            "(a : A , b : B)",
+        ];
 
-        let mut tmp = HashMap::new();
-        tmp.insert("a".to_string(), ShapeType::Reference("A".to_string()));
-        tmp.insert("b".to_string(), ShapeType::Reference("B".to_string()));
+        for test_val in test_values {
+            let (i, t) = shape_expr(test_val).unwrap();
+            assert_eq!(i, "");
 
-        assert_eq!(*t, ShapeType::RecordLiteral(tmp))
+            let mut tmp = HashMap::new();
+            tmp.insert("a".to_string(), ShapeType::Reference("A".to_string()));
+            tmp.insert("b".to_string(), ShapeType::Reference("B".to_string()));
+
+            assert_eq!(*t, ShapeType::RecordLiteral(tmp))
+        }
     }
 
     #[test]
     fn test_tuple_literal() {
-        let (i, t) = shape_expr("(A, B)").unwrap();
-        assert_eq!(i, "");
+        let test_values = vec!["(A,B)", "(A, B)", "(A ,B)", "(A , B)", "( A , B )"];
 
-        let mut tmp = Vec::with_capacity(2);
-        tmp.push(ShapeType::Reference("A".to_string()));
-        tmp.push(ShapeType::Reference("B".to_string()));
+        for test_val in test_values {
+            let (i, t) = shape_expr(test_val).unwrap();
+            assert_eq!(i, "");
 
-        assert_eq!(*t, ShapeType::TupleLiteral(tmp))
+            let mut tmp = Vec::with_capacity(2);
+            tmp.push(ShapeType::Reference("A".to_string()));
+            tmp.push(ShapeType::Reference("B".to_string()));
+
+            assert_eq!(*t, ShapeType::TupleLiteral(tmp))
+        }
     }
 }
