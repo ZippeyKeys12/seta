@@ -225,8 +225,8 @@ mod tests {
     #[test]
     fn test_literal() {
         let (i, t) = shape_expr("A").unwrap();
-        assert_eq!(i, "");
-        assert_eq!(*t, ShapeType::Reference("A".to_string()))
+        assert_eq!(*t, ShapeType::Reference("A".to_string()));
+        assert_eq!(i, "")
     }
 
     #[test]
@@ -240,14 +240,14 @@ mod tests {
 
         for (test_val, a, b) in test_values {
             let (i, t) = shape_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 ShapeType::Intersection(
                     Box::new(ShapeType::Reference(a.to_string())),
                     Box::new(ShapeType::Reference(b.to_string()))
                 )
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -262,14 +262,14 @@ mod tests {
 
         for (test_val, a, b) in test_values {
             let (i, t) = shape_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 ShapeType::Union(
                     Box::new(ShapeType::Reference(a.to_string())),
                     Box::new(ShapeType::Reference(b.to_string()))
                 )
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -284,14 +284,14 @@ mod tests {
 
         for (test_val, a, b) in test_values {
             let (i, t) = shape_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 ShapeType::Function(
                     Box::new(ShapeType::Reference(a.to_string())),
                     Box::new(ShapeType::Reference(b.to_string()))
                 )
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -307,13 +307,13 @@ mod tests {
 
         for test_val in test_values {
             let (i, t) = shape_expr(test_val).unwrap();
-            assert_eq!(i, "");
 
             let mut tmp = HashMap::new();
             tmp.insert("a".to_string(), ShapeType::Reference("A".to_string()));
             tmp.insert("b".to_string(), ShapeType::Reference("B".to_string()));
 
-            assert_eq!(*t, ShapeType::RecordLiteral(tmp))
+            assert_eq!(*t, ShapeType::RecordLiteral(tmp));
+            assert_eq!(i, "")
         }
     }
 
@@ -323,13 +323,13 @@ mod tests {
 
         for test_val in test_values {
             let (i, t) = shape_expr(test_val).unwrap();
-            assert_eq!(i, "");
 
             let mut tmp = Vec::with_capacity(2);
             tmp.push(ShapeType::Reference("A".to_string()));
             tmp.push(ShapeType::Reference("B".to_string()));
 
-            assert_eq!(*t, ShapeType::TupleLiteral(tmp))
+            assert_eq!(*t, ShapeType::TupleLiteral(tmp));
+            assert_eq!(i, "")
         }
     }
 
@@ -386,12 +386,22 @@ mod tests {
                     )),
                 ),
             ),
+            (
+                "(A | B) & C",
+                ShapeType::Intersection(
+                    Box::new(ShapeType::Union(
+                        Box::new(ShapeType::Reference("A".to_string())),
+                        Box::new(ShapeType::Reference("B".to_string())),
+                    )),
+                    Box::new(ShapeType::Reference("C".to_string())),
+                ),
+            ),
         ];
 
         for (test_val, ans) in test_values {
             let (i, t) = shape_expr(test_val).unwrap();
-            assert_eq!(i, "");
-            assert_eq!(*t, ans)
+            assert_eq!(*t, ans);
+            assert_eq!(i, "")
         }
     }
 }

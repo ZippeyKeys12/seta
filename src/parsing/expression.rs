@@ -9,7 +9,8 @@ use nom::{
     bytes::complete::tag,
     character::complete::digit1,
     combinator::{map, opt},
-    sequence::{preceded, terminated, tuple},
+    multi::separated_list,
+    sequence::{delimited, preceded, terminated, tuple},
     IResult,
 };
 
@@ -26,6 +27,9 @@ pub enum Expression {
     Subtraction(Box<Expression>, Box<Expression>),
     Multiplication(Box<Expression>, Box<Expression>),
     Division(Box<Expression>, Box<Expression>),
+    Reference(String),
+    FunctionCall(String, Vec<Expression>),
+    Dot(Box<Expression>, Box<Expression>),
 }
 
 pub fn val_expr(input: &str) -> IResult<&str, Box<Expression>> {
@@ -34,9 +38,14 @@ pub fn val_expr(input: &str) -> IResult<&str, Box<Expression>> {
             (int_literal, int_expr),
             (|i| ws!(alt((tag("-"), tag("~"), tag("!"))))(i), prefix_expr),
             (|i| ws!(tag("("))(i), parentheses),
+            (
+                |i| ws!(identifier)(i),
+                |p, i, t| alt((|i2| function_call(p, i2, t), |i2| reference_expr(p, i2, t)))(i),
+            ),
         ],
 
         mixfixes: &vec![
+            (200, |i| ws!(tag("."))(i), dot_expr),
             (100, |i| ws!(alt((tag("*"), tag("/"))))(i), infix_expr),
             (90, |i| ws!(alt((tag("+"), tag("-"))))(i), infix_expr),
         ],
@@ -76,6 +85,14 @@ fn int_expr<'a>(
     ))
 }
 
+fn reference_expr<'a>(
+    _parser: &PrattParser<Box<Expression>>,
+    input: &'a str,
+    token: &'a str,
+) -> IResult<&'a str, Box<Expression>> {
+    Ok((input, Box::new(Expression::Reference(token.to_string()))))
+}
+
 fn parentheses<'a>(
     parser: &PrattParser<Box<Expression>>,
     input: &'a str,
@@ -110,6 +127,29 @@ fn prefix_expr<'a>(
             nom::error::ErrorKind::Alt,
         ))),
     }
+}
+
+fn function_call<'a>(
+    parser: &PrattParser<Box<Expression>>,
+    input: &'a str,
+    token: &'a str,
+) -> IResult<&'a str, Box<Expression>> {
+    let (input, args) = delimited(
+        ws!(tag("(")),
+        separated_list(ws!(tag(",")), |i| parser.parse(i)),
+        ws!(tag(")")),
+    )(input)?;
+
+    let mut res = Vec::with_capacity(args.len());
+
+    for a in args {
+        res.push(*a)
+    }
+
+    Ok((
+        input,
+        Box::new(Expression::FunctionCall(token.to_string(), res)),
+    ))
 }
 
 fn infix_expr<'a>(
@@ -147,6 +187,17 @@ fn infix_expr<'a>(
     }
 }
 
+fn dot_expr<'a>(
+    parser: &PrattParser<Box<Expression>>,
+    input: &'a str,
+    left: Box<Expression>,
+    _token: &'a str,
+    _precedence: u16,
+) -> IResult<&'a str, Box<Expression>> {
+    let (input, right) = parser.expression(input, _precedence)?;
+    Ok((input, Box::new(Expression::Dot(left, right))))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,8 +215,8 @@ mod tests {
 
         for test_val in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
-            assert_eq!(*t, Expression::IntLiteral(test_val.parse().unwrap()))
+            assert_eq!(*t, Expression::IntLiteral(test_val.parse().unwrap()));
+            assert_eq!(i, "")
         }
     }
 
@@ -193,13 +244,13 @@ mod tests {
 
         for test_val in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 Expression::Negation(Box::new(Expression::IntLiteral(
                     test_val[1..].parse().unwrap()
                 )))
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -215,13 +266,13 @@ mod tests {
 
         for test_val in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 Expression::Inversion(Box::new(Expression::IntLiteral(
                     test_val[1..].parse().unwrap()
                 )))
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -237,13 +288,13 @@ mod tests {
 
         for test_val in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 Expression::Not(Box::new(Expression::IntLiteral(
                     test_val[1..].parse().unwrap()
                 )))
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -258,14 +309,14 @@ mod tests {
 
         for (test_val, a, b) in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 Expression::Addition(
                     Box::new(Expression::IntLiteral(a)),
                     Box::new(Expression::IntLiteral(b))
                 )
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -280,14 +331,14 @@ mod tests {
 
         for (test_val, a, b) in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 Expression::Subtraction(
                     Box::new(Expression::IntLiteral(a)),
                     Box::new(Expression::IntLiteral(b))
                 )
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -302,14 +353,14 @@ mod tests {
 
         for (test_val, a, b) in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 Expression::Multiplication(
                     Box::new(Expression::IntLiteral(a)),
                     Box::new(Expression::IntLiteral(b))
                 )
-            )
+            );
+            assert_eq!(i, "")
         }
     }
 
@@ -324,14 +375,31 @@ mod tests {
 
         for (test_val, a, b) in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
             assert_eq!(
                 *t,
                 Expression::Division(
                     Box::new(Expression::IntLiteral(a)),
                     Box::new(Expression::IntLiteral(b))
                 )
-            )
+            );
+            assert_eq!(i, "")
+        }
+    }
+    #[test]
+    fn test_reference() {
+        let test_values = vec![
+            "adfsdfd",
+            "sghdjfg",
+            "uyerfads",
+            "hghriehgao",
+            "qgargehiow",
+            "qafhgilrbhof",
+        ];
+
+        for test_val in test_values {
+            let (i, t) = val_expr(test_val).unwrap();
+            assert_eq!(*t, Expression::Reference(test_val.to_string()));
+            assert_eq!(i, "")
         }
     }
 
@@ -339,21 +407,21 @@ mod tests {
     fn test_order_of_operations() {
         let test_values = vec![
             (
-                "41 * 64 + 29",
+                "dsafgsds * 64 + 29",
                 Expression::Addition(
                     Box::new(Expression::Multiplication(
-                        Box::new(Expression::IntLiteral(41)),
+                        Box::new(Expression::Reference("dsafgsds".to_string())),
                         Box::new(Expression::IntLiteral(64)),
                     )),
                     Box::new(Expression::IntLiteral(29)),
                 ),
             ),
             (
-                "23 - 32 + 34",
+                "23 - sd + 34",
                 Expression::Addition(
                     Box::new(Expression::Subtraction(
                         Box::new(Expression::IntLiteral(23)),
-                        Box::new(Expression::IntLiteral(32)),
+                        Box::new(Expression::Reference("sd".to_string())),
                     )),
                     Box::new(Expression::IntLiteral(34)),
                 ),
@@ -369,12 +437,12 @@ mod tests {
                 ),
             ),
             (
-                "43 - 67 * 97",
+                "43 - 67 * sdfsdfs",
                 Expression::Subtraction(
                     Box::new(Expression::IntLiteral(43)),
                     Box::new(Expression::Multiplication(
                         Box::new(Expression::IntLiteral(67)),
-                        Box::new(Expression::IntLiteral(97)),
+                        Box::new(Expression::Reference("sdfsdfs".to_string())),
                     )),
                 ),
             ),
@@ -411,12 +479,41 @@ mod tests {
                     )),
                 ),
             ),
+            (
+                "abc.asd(1+2, 3*4)",
+                Expression::Dot(
+                    Box::new(Expression::Reference("abc".to_string())),
+                    Box::new(Expression::FunctionCall(
+                        "asd".to_string(),
+                        vec![
+                            Expression::Addition(
+                                Box::new(Expression::IntLiteral(1)),
+                                Box::new(Expression::IntLiteral(2)),
+                            ),
+                            Expression::Multiplication(
+                                Box::new(Expression::IntLiteral(3)),
+                                Box::new(Expression::IntLiteral(4)),
+                            ),
+                        ],
+                    )),
+                ),
+            ),
+            (
+                "121 + df.htdg()",
+                Expression::Addition(
+                    Box::new(Expression::IntLiteral(121)),
+                    Box::new(Expression::Dot(
+                        Box::new(Expression::Reference("df".to_string())),
+                        Box::new(Expression::FunctionCall("htdg".to_string(), vec![])),
+                    )),
+                ),
+            ),
         ];
 
         for (test_val, ans) in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(i, "");
-            assert_eq!(*t, ans)
+            assert_eq!(*t, ans);
+            assert_eq!(i, "")
         }
     }
 }
