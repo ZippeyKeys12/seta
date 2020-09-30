@@ -4,7 +4,7 @@ use std::{collections::HashSet, fmt, iter::FromIterator};
 
 use nom::{branch::alt, bytes::complete::tag, multi::separated_list, sequence::delimited, IResult};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SecurityType {
     Top,
     Literal(HashSet<String>),
@@ -76,29 +76,39 @@ mod tests {
     #[test]
     fn test_top() {
         let (i, t) = sec_type_expr("{}").unwrap();
+        assert_eq!(*t, SecurityType::Top);
         assert_eq!(i, "");
 
-        assert_eq!(*t, SecurityType::Top)
+        let (i, t) = sec_type_expr("{ }").unwrap();
+        assert_eq!(*t, SecurityType::Top);
+        assert_eq!(i, "")
     }
 
     #[test]
     fn test_bottom() {
         let (i, t) = sec_type_expr("{_}").unwrap();
+        assert_eq!(*t, SecurityType::Bottom);
         assert_eq!(i, "");
 
-        assert_eq!(*t, SecurityType::Bottom)
+        let (i, t) = sec_type_expr("{_ }").unwrap();
+        assert_eq!(*t, SecurityType::Bottom);
+        assert_eq!(i, "");
+
+        let (i, t) = sec_type_expr("{ _}").unwrap();
+        assert_eq!(*t, SecurityType::Bottom);
+        assert_eq!(i, "")
     }
 
     #[test]
     fn test_literal() {
         let (i, t) = sec_type_expr("{A,B,C}").unwrap();
-        assert_eq!(i, "");
 
         let mut tmp = HashSet::new();
         tmp.insert("A".to_string());
         tmp.insert("B".to_string());
         tmp.insert("C".to_string());
 
-        assert_eq!(*t, SecurityType::Literal(tmp))
+        assert_eq!(*t, SecurityType::Literal(tmp));
+        assert_eq!(i, "")
     }
 }
