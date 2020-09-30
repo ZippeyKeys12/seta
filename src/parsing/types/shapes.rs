@@ -15,7 +15,7 @@ use nom::{
     IResult,
 };
 
-// TODO: Binary op order shouldn't matter
+// TODO: Intersection and Union order shouldn't matter
 #[derive(Clone, Debug, PartialEq)]
 pub enum ShapeType {
     Negation(Box<ShapeType>),
@@ -330,6 +330,68 @@ mod tests {
             tmp.push(ShapeType::Reference("B".to_string()));
 
             assert_eq!(*t, ShapeType::TupleLiteral(tmp))
+        }
+    }
+
+    #[test]
+    fn test_order_of_operations() {
+        let test_values = vec![
+            (
+                "A & B | C",
+                ShapeType::Union(
+                    Box::new(ShapeType::Intersection(
+                        Box::new(ShapeType::Reference("A".to_string())),
+                        Box::new(ShapeType::Reference("B".to_string())),
+                    )),
+                    Box::new(ShapeType::Reference("C".to_string())),
+                ),
+            ),
+            (
+                "A -> B | C",
+                ShapeType::Function(
+                    Box::new(ShapeType::Reference("A".to_string())),
+                    Box::new(ShapeType::Union(
+                        Box::new(ShapeType::Reference("B".to_string())),
+                        Box::new(ShapeType::Reference("C".to_string())),
+                    )),
+                ),
+            ),
+            (
+                "A -> B -> C",
+                ShapeType::Function(
+                    Box::new(ShapeType::Reference("A".to_string())),
+                    Box::new(ShapeType::Function(
+                        Box::new(ShapeType::Reference("B".to_string())),
+                        Box::new(ShapeType::Reference("C".to_string())),
+                    )),
+                ),
+            ),
+            (
+                "A | B -> C",
+                ShapeType::Function(
+                    Box::new(ShapeType::Union(
+                        Box::new(ShapeType::Reference("A".to_string())),
+                        Box::new(ShapeType::Reference("B".to_string())),
+                    )),
+                    Box::new(ShapeType::Reference("C".to_string())),
+                ),
+            ),
+            (
+                "A | B & C",
+                ShapeType::Union(
+                    Box::new(ShapeType::Reference("A".to_string())),
+                    Box::new(ShapeType::Intersection(
+                        Box::new(ShapeType::Reference("B".to_string())),
+                        Box::new(ShapeType::Reference("C".to_string())),
+                    )),
+                ),
+            ),
+        ];
+
+        for (test_val, ans) in test_values {
+            let (i, t) = shape_expr(test_val).unwrap();
+            assert_eq!(i, "");
+            assert_eq!(*t, ans)
         }
     }
 }
