@@ -17,7 +17,7 @@ use nom::{
 extern crate regex;
 use regex::Regex;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     IntLiteral(i32),
     Negation(Box<Expression>),

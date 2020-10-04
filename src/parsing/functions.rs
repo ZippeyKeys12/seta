@@ -18,6 +18,7 @@ use nom::{
     IResult,
 };
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Function {
     doc: Option<toml::Value>,
     name: String,

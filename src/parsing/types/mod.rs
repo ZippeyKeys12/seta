@@ -1,23 +1,34 @@
 use crate::parsing::general::identifier;
 
+use std::collections::HashSet;
+
 pub mod security;
 pub mod shapes;
 
-use security::SecurityType;
+use security::{sec_type_expr, SecurityType};
+use shapes::{shape_expr, ShapeType};
 
 use std::{collections::HashMap, fmt, iter::FromIterator};
 
 use nom::{
+    branch::alt,
     bytes::complete::tag,
     combinator::{map, opt},
     multi::separated_list,
-    sequence::{separated_pair, tuple},
+    sequence::{delimited, separated_pair, terminated, tuple},
     IResult,
 };
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Type {
-    pub shape: Box<shapes::ShapeType>,
+    pub shape: Box<ShapeType>,
     pub security: Box<SecurityType>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypeDecl {
+    pub name: String,
+    pub typ: Box<Type>,
 }
 
 impl fmt::Display for Type {
@@ -28,7 +39,7 @@ impl fmt::Display for Type {
 
 pub fn type_expr(input: &str) -> IResult<&str, Box<Type>> {
     map(
-        tuple((ws!(shapes::shape_expr), ws!(opt(security::sec_type_expr)))),
+        tuple((ws!(shape_expr), ws!(opt(sec_type_expr)))),
         |(shpe, sec)| {
             Box::new(Type {
                 shape: shpe,
@@ -49,4 +60,60 @@ pub fn type_spec_list(input: &str) -> IResult<&str, HashMap<&str, Box<Type>>> {
     let (input, list) = separated_list(tag(","), type_spec)(input)?;
 
     Ok((input, HashMap::from_iter(list)))
+}
+
+pub fn type_decl(input: &str) -> IResult<&str, Box<TypeDecl>> {
+    let (input, name) = delimited(ws!(tag("type")), identifier, ws!(tag("=")))(input)?;
+    let (input, typ) = terminated(ws!(type_expr), ws!(alt((tag(";"), tag("\n")))))(input)?;
+
+    Ok((
+        input,
+        Box::new(TypeDecl {
+            name: name.to_string(),
+            typ,
+        }),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_type_expr() {
+        let test_values = vec![
+            (
+                "A & B {_}",
+                Type {
+                    shape: Box::new(ShapeType::Intersection(
+                        Box::new(ShapeType::Reference("A".to_string())),
+                        Box::new(ShapeType::Reference("B".to_string())),
+                    )),
+
+                    security: Box::new(SecurityType::Top),
+                },
+            ),
+            (
+                "A -> D {R, S, T}",
+                Type {
+                    shape: Box::new(ShapeType::Function(
+                        Box::new(ShapeType::Reference("A".to_string())),
+                        Box::new(ShapeType::Reference("D".to_string())),
+                    )),
+
+                    security: Box::new(SecurityType::Literal({
+                        let mut tmp = HashSet::new();
+                        tmp.extend(vec!["R".to_string(), "S".to_string(), "T".to_string()]);
+                        tmp
+                    })),
+                },
+            ),
+        ];
+
+        for (test_val, ans) in test_values {
+            let (i, t) = type_expr(test_val).unwrap();
+            assert_eq!(*t, ans);
+            assert_eq!(i, "");
+        }
+    }
 }

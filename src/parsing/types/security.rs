@@ -18,7 +18,13 @@ impl fmt::Display for SecurityType {
         };
 
         match self {
-            SecurityType::Top => (),
+            SecurityType::Top => {
+                if let Err(a) = write!(f, "_") {
+                    {
+                        return Err(a);
+                    }
+                }
+            }
 
             SecurityType::Literal(classes) => {
                 if let Err(a) = write!(
@@ -40,13 +46,7 @@ impl fmt::Display for SecurityType {
                 }
             }
 
-            SecurityType::Bottom => {
-                if let Err(a) = write!(f, "_") {
-                    {
-                        return Err(a);
-                    }
-                }
-            }
+            SecurityType::Bottom => (),
         };
 
         write!(f, "}}")
@@ -61,8 +61,8 @@ pub fn sec_type_expr(input: &str) -> IResult<&str, Box<SecurityType>> {
     )(input)?;
 
     let tmp = match list[..] {
-        [] => SecurityType::Top,
-        ["_"] => SecurityType::Bottom,
+        [] => SecurityType::Bottom,
+        ["_"] => SecurityType::Top,
         _ => SecurityType::Literal(HashSet::from_iter(list.iter().map(|t| t.to_string()))),
     };
 
@@ -75,26 +75,26 @@ mod tests {
 
     #[test]
     fn test_top() {
-        let (i, t) = sec_type_expr("{}").unwrap();
+        let (i, t) = sec_type_expr("{_}").unwrap();
         assert_eq!(*t, SecurityType::Top);
         assert_eq!(i, "");
 
-        let (i, t) = sec_type_expr("{ }").unwrap();
+        let (i, t) = sec_type_expr("{_ }").unwrap();
+        assert_eq!(*t, SecurityType::Top);
+        assert_eq!(i, "");
+
+        let (i, t) = sec_type_expr("{ _}").unwrap();
         assert_eq!(*t, SecurityType::Top);
         assert_eq!(i, "")
     }
 
     #[test]
     fn test_bottom() {
-        let (i, t) = sec_type_expr("{_}").unwrap();
+        let (i, t) = sec_type_expr("{}").unwrap();
         assert_eq!(*t, SecurityType::Bottom);
         assert_eq!(i, "");
 
-        let (i, t) = sec_type_expr("{_ }").unwrap();
-        assert_eq!(*t, SecurityType::Bottom);
-        assert_eq!(i, "");
-
-        let (i, t) = sec_type_expr("{ _}").unwrap();
+        let (i, t) = sec_type_expr("{ }").unwrap();
         assert_eq!(*t, SecurityType::Bottom);
         assert_eq!(i, "")
     }
