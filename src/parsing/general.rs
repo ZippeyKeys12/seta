@@ -1,5 +1,7 @@
-use super::functions::Function;
+use super::expression::Expression;
 use super::types::{type_expr, Type};
+
+use std::collections::HashMap;
 
 extern crate nom;
 use nom::{
@@ -25,7 +27,13 @@ macro_rules! ws {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Definition {
-    FunctionDecl(Function),
+    FunctionDecl {
+        doc: Option<toml::Value>,
+        name: String,
+        parameters: HashMap<String, Box<Type>>,
+        ret: (String, Box<Type>),
+        body: Box<Expression>,
+    },
     TypeDecl(String, Type),
 }
 

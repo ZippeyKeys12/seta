@@ -18,15 +18,6 @@ use nom::{
     IResult,
 };
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Function {
-    doc: Option<toml::Value>,
-    name: String,
-    parameters: HashMap<String, Box<Type>>,
-    ret: (String, Box<Type>),
-    body: Box<Expression>,
-}
-
 pub fn function_decl(input: &str) -> IResult<&str, Definition> {
     let (input, (doc, (name, arguments, ret), _, body)) = tuple((
         opt(ws!(docstring)),
@@ -43,13 +34,13 @@ pub fn function_decl(input: &str) -> IResult<&str, Definition> {
 
     Ok((
         input,
-        Definition::FunctionDecl(Function {
+        Definition::FunctionDecl {
             doc,
             name: name.to_string(),
             parameters: map,
             ret: (ret.0.to_string(), ret.1),
             body,
-        }),
+        },
     ))
 }
 
