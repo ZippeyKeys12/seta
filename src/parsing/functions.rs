@@ -1,7 +1,7 @@
-use crate::parsing::{
+use super::{
     docs::docstring,
     expression::{val_expr, Expression},
-    general::identifier,
+    general::{identifier, Definition},
     types::{type_expr, type_spec, type_spec_list, Type},
 };
 
@@ -27,9 +27,9 @@ pub struct Function {
     body: Box<Expression>,
 }
 
-pub fn function_decl(input: &str) -> IResult<&str, Function> {
+pub fn function_decl(input: &str) -> IResult<&str, Definition> {
     let (input, (doc, (name, arguments, ret), _, body)) = tuple((
-        ws!(opt(docstring)),
+        opt(ws!(docstring)),
         ws!(function_sig),
         ws!(tag("=")),
         ws!(val_expr),
@@ -43,13 +43,13 @@ pub fn function_decl(input: &str) -> IResult<&str, Function> {
 
     Ok((
         input,
-        Function {
+        Definition::FunctionDecl(Function {
             doc,
             name: name.to_string(),
             parameters: map,
             ret: (ret.0.to_string(), ret.1),
             body,
-        },
+        }),
     ))
 }
 

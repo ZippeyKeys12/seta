@@ -1,6 +1,4 @@
-use crate::parsing::general::identifier;
-
-use std::collections::HashSet;
+use super::general::{identifier, line_terminator, Definition};
 
 pub mod security;
 pub mod shapes;
@@ -13,6 +11,7 @@ use std::{collections::HashMap, fmt, iter::FromIterator};
 use nom::{
     branch::alt,
     bytes::complete::tag,
+    character::complete::{char, newline},
     combinator::{map, opt},
     multi::separated_list,
     sequence::{delimited, separated_pair, terminated, tuple},
@@ -23,12 +22,6 @@ use nom::{
 pub struct Type {
     pub shape: Box<ShapeType>,
     pub security: Box<SecurityType>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct TypeDecl {
-    pub name: String,
-    pub typ: Box<Type>,
 }
 
 impl fmt::Display for Type {
@@ -62,22 +55,17 @@ pub fn type_spec_list(input: &str) -> IResult<&str, HashMap<&str, Box<Type>>> {
     Ok((input, HashMap::from_iter(list)))
 }
 
-pub fn type_decl(input: &str) -> IResult<&str, Box<TypeDecl>> {
+pub fn type_decl(input: &str) -> IResult<&str, Definition> {
     let (input, name) = delimited(ws!(tag("type")), identifier, ws!(tag("=")))(input)?;
-    let (input, typ) = terminated(ws!(type_expr), ws!(alt((tag(";"), tag("\n")))))(input)?;
+    let (input, typ) = terminated(ws!(type_expr), line_terminator)(input)?;
 
-    Ok((
-        input,
-        Box::new(TypeDecl {
-            name: name.to_string(),
-            typ,
-        }),
-    ))
+    Ok((input, Definition::TypeDecl(name.to_string(), *typ)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn test_type_expr() {
