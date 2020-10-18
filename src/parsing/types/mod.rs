@@ -1,4 +1,4 @@
-use super::general::{identifier, line_terminator, Definition};
+use super::general::{identifier, line_terminator, Definition, TypeDecl};
 
 pub mod security;
 pub mod shapes;
@@ -59,7 +59,13 @@ pub fn type_decl(input: &str) -> IResult<&str, Definition> {
     let (input, name) = delimited(ws!(tag("type")), identifier, ws!(tag("=")))(input)?;
     let (input, typ) = terminated(ws!(type_expr), line_terminator)(input)?;
 
-    Ok((input, Definition::TypeDecl(name.to_string(), *typ)))
+    Ok((
+        input,
+        Definition::Type(TypeDecl {
+            name: name.to_string(),
+            value: *typ,
+        }),
+    ))
 }
 
 #[cfg(test)]

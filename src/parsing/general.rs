@@ -7,8 +7,9 @@ extern crate nom;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, char, newline, one_of},
+    character::complete::{alpha1, char, line_ending, newline, one_of},
     combinator::{map, opt},
+    error::VerboseError,
     multi::separated_list,
     sequence::{delimited, separated_pair, terminated, tuple},
     IResult,
@@ -27,14 +28,23 @@ macro_rules! ws {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Definition {
-    FunctionDecl {
-        doc: Option<toml::Value>,
-        name: String,
-        parameters: HashMap<String, Box<Type>>,
-        ret: (String, Box<Type>),
-        body: Box<Expression>,
-    },
-    TypeDecl(String, Type),
+    Function(FunctionDecl),
+    Type(TypeDecl),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FunctionDecl {
+    pub doc: Option<toml::Value>,
+    pub name: String,
+    pub parameters: HashMap<String, Box<Type>>,
+    pub ret: (String, Box<Type>),
+    pub body: Box<Expression>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypeDecl {
+    pub name: String,
+    pub value: Type,
 }
 
 pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
@@ -42,7 +52,12 @@ pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 }
 
 pub fn line_terminator(input: &str) -> IResult<&str, ()> {
-    let ret = alt((ws!(char(';')), char('\n')))(input);
+    assert_eq!(
+        line_ending::<&str, VerboseError<&str>>("\r\nc"),
+        Ok(("c", "\r\n"))
+    );
+
+    let ret = alt((ws!(tag(";")), line_ending))(input);
 
     match ret {
         Ok((input, _)) => Ok((input, ())),

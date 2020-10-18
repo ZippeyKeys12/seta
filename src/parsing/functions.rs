@@ -1,7 +1,7 @@
 use super::{
     docs::docstring,
     expression::{val_expr, Expression},
-    general::{identifier, Definition},
+    general::{identifier, Definition, FunctionDecl},
     types::{type_expr, type_spec, type_spec_list, Type},
 };
 
@@ -34,13 +34,13 @@ pub fn function_decl(input: &str) -> IResult<&str, Definition> {
 
     Ok((
         input,
-        Definition::FunctionDecl {
+        Definition::Function(FunctionDecl {
             doc,
             name: name.to_string(),
             parameters: map,
             ret: (ret.0.to_string(), ret.1),
             body,
-        },
+        }),
     ))
 }
 
