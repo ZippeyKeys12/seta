@@ -23,12 +23,12 @@ pub struct CompilationUnit {
     pub definitions: Vec<Definition>,
 }
 
-pub fn compilation_unit(input: &str) -> IResult<&str, ()> {
+pub fn compilation_unit(input: &str) -> IResult<&str, CompilationUnit> {
     let (input, _file_doc) = opt(docstring)(input)?;
 
     let (input, definitions) = many0(alt((type_decl, function_decl)))(input)?;
     let comp_unit = CompilationUnit { definitions };
     assert_eq!(input, "");
 
-    Ok((input, ()))
+    Ok((input, comp_unit))
 }

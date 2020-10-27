@@ -3,13 +3,14 @@ use crate::parsing::{
     pratt::{PrattParser, MAX_PRECEDENCE},
 };
 
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, str::FromStr};
 
 extern crate nom;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    combinator::peek,
+    combinator::{all_consuming, complete},
+    error::ErrorKind,
     multi::separated_list,
     sequence::{delimited, separated_pair, terminated},
     IResult,
@@ -25,6 +26,19 @@ pub enum ShapeType {
     RecordLiteral(HashMap<String, ShapeType>),
     TupleLiteral(Vec<ShapeType>),
     Reference(String),
+}
+
+impl<'a> FromStr for ShapeType {
+    type Err = nom::Err<ErrorKind>;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match all_consuming(complete(shape_expr))(input) {
+            Ok(ok) => Ok(*ok.1),
+            Err(nom::Err::Error(err)) => Err(nom::Err::Error(err.1)),
+            Err(nom::Err::Failure(err)) => Err(nom::Err::Failure(err.1)),
+            _ => Err(nom::Err::Error(ErrorKind::Eof)),
+        }
+    }
 }
 
 impl fmt::Display for ShapeType {

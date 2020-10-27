@@ -56,7 +56,7 @@ pub fn type_spec_list(input: &str) -> IResult<&str, HashMap<&str, Box<Type>>> {
 }
 
 pub fn type_decl(input: &str) -> IResult<&str, Definition> {
-    let (input, name) = delimited(ws!(tag("type")), identifier, ws!(tag("=")))(input)?;
+    let (input, name) = delimited(ws!(tag("type")), ws!(identifier), ws!(tag("=")))(input)?;
     let (input, typ) = terminated(ws!(type_expr), line_terminator)(input)?;
 
     Ok((
@@ -108,6 +108,65 @@ mod tests {
             let (i, t) = type_expr(test_val).unwrap();
             assert_eq!(*t, ans);
             assert_eq!(i, "");
+        }
+    }
+
+    #[test]
+    fn test_type_decl() {
+        let test_values = vec![
+            (
+                "type A = Int | Float;",
+                TypeDecl {
+                    name: "A".to_string(),
+                    value: Type {
+                        shape: Box::new(ShapeType::Union(
+                            Box::new(ShapeType::Reference("Int".to_string())),
+                            Box::new(ShapeType::Reference("Float".to_string())),
+                        )),
+
+                        security: Box::new(SecurityType::Top),
+                    },
+                },
+            ),
+            (
+                "type B=(Int, Float);",
+                TypeDecl {
+                    name: "B".to_string(),
+                    value: Type {
+                        shape: Box::new(ShapeType::TupleLiteral(vec![
+                            ShapeType::Reference("Int".to_string()),
+                            ShapeType::Reference("Float".to_string()),
+                        ])),
+
+                        security: Box::new(SecurityType::Top),
+                    },
+                },
+            ),
+            (
+                "type C=(a:Int, b:Float) ;",
+                TypeDecl {
+                    name: "C".to_string(),
+                    value: Type {
+                        shape: Box::new(ShapeType::RecordLiteral({
+                            let mut tmp = HashMap::new();
+                            tmp.insert("a".to_string(), ShapeType::Reference("Int".to_string()));
+                            tmp.insert("b".to_string(), ShapeType::Reference("Float".to_string()));
+                            tmp
+                        })),
+
+                        security: Box::new(SecurityType::Top),
+                    },
+                },
+            ),
+        ];
+
+        for (test_val, ans) in test_values {
+            let (i, t) = type_decl(test_val).unwrap();
+
+            if let Definition::Type(typ) = t {
+                assert_eq!(typ, ans);
+                assert_eq!(i, "");
+            }
         }
     }
 }
