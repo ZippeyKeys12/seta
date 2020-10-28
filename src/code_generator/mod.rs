@@ -11,16 +11,16 @@ use std::{collections::HashMap, error::Error, path::Path};
 use anyhow::Result;
 
 extern crate inkwell;
-use inkwell::module::Module;
-use inkwell::support::LLVMString;
-use inkwell::targets::{InitializationConfig, Target};
-use inkwell::OptimizationLevel;
 use inkwell::{
     builder::Builder,
     context::Context,
     execution_engine::{ExecutionEngine, JitFunction},
-    types::BasicTypeEnum,
+    module::Module,
+    support::LLVMString,
+    targets::{InitializationConfig, Target},
+    types::{AnyTypeEnum, BasicType, BasicTypeEnum},
     values::IntValue,
+    OptimizationLevel,
 };
 
 pub struct CodeGenerator<'a> {
@@ -28,7 +28,7 @@ pub struct CodeGenerator<'a> {
     module: Module<'a>,
     builder: Builder<'a>,
     execution_engine: ExecutionEngine<'a>,
-    symbols: Vec<HashMap<String, BasicTypeEnum<'a>>>,
+    symbols: Vec<HashMap<String, &'a dyn BasicType<'a>>>,
 }
 
 impl<'a> CodeGenerator<'a> {
@@ -39,26 +39,24 @@ impl<'a> CodeGenerator<'a> {
         let module = context.create_module(module_name);
         let execution_engine = module.create_execution_engine()?;
 
-        let mut code_generator = CodeGenerator {
+        // Return
+        Ok(CodeGenerator {
             context: &context,
             module,
             builder: context.create_builder(),
             execution_engine,
             symbols: vec![HashMap::new()],
-        };
-
-        // Builtin Types
-        code_generator.add_symbol(
-            "Int".to_string(),
-            BasicTypeEnum::IntType(code_generator.context.i32_type()),
-        );
-
-        // Return
-        Ok(code_generator)
+        })
     }
 
-    pub fn add_symbol(&mut self, key: String, symbol: BasicTypeEnum<'a>) {
+    pub fn add_symbol(&mut self, key: String, symbol: &'a dyn BasicType<'a>) {
         self.symbols.peek_mut().unwrap().insert(key, symbol);
+    }
+
+    pub fn add_symbols(&mut self, symbols: HashMap<String, &'a dyn BasicType<'a>>) {
+        for (k, symbol) in symbols {
+            self.add_symbol(k, symbol)
+        }
     }
 
     pub fn save(&self, path: &Path) -> bool {
@@ -66,9 +64,6 @@ impl<'a> CodeGenerator<'a> {
     }
 
     pub fn compile(&mut self, compilation_unit: &CompilationUnit) {
-        // let i64_type = self.context.i64_type();
-        // let fn_type = i64_type.fn_type(&[i64_type.into(), i64_type.into(), i64_type.into()], false);
-
         for d in &compilation_unit.definitions {
             if let Definition::Type(typ) = d {
                 self.compile_type_decl(typ)
@@ -86,7 +81,7 @@ impl<'a> CodeGenerator<'a> {
         self.add_symbol(name, typ);
     }
 
-    fn compile_type(&self, typ: &Type) -> Result<BasicTypeEnum<'a>> {
+    fn compile_type(&self, typ: &Type) -> Result<&'a dyn BasicType<'a>> {
         let scope = &self.symbols.peek().unwrap();
 
         match &*typ.shape {
@@ -99,7 +94,16 @@ impl<'a> CodeGenerator<'a> {
 pub fn compile(path: &Path, compilation_unit: CompilationUnit) -> Result<(), LLVMString> {
     let context = Context::create();
 
+    // Build builtins
+    let mut builtins: HashMap<String, &dyn BasicType> = HashMap::new();
+
+    let int32 = context.i32_type();
+    builtins.insert("Int".to_string(), &int32);
+
+    // Load builtins
     let mut code_generator = CodeGenerator::new(&context, "main")?;
+    code_generator.add_symbols(builtins);
+
     code_generator.compile(&compilation_unit);
     code_generator.save(path);
 
