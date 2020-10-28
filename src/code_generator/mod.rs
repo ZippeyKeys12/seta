@@ -65,7 +65,7 @@ impl<'a> CodeGenerator<'a> {
         self.module.write_bitcode_to_path(path)
     }
 
-    pub fn compile(&'a mut self, compilation_unit: &CompilationUnit) {
+    pub fn compile(&mut self, compilation_unit: &CompilationUnit) {
         // let i64_type = self.context.i64_type();
         // let fn_type = i64_type.fn_type(&[i64_type.into(), i64_type.into(), i64_type.into()], false);
 
@@ -78,7 +78,7 @@ impl<'a> CodeGenerator<'a> {
 
     fn compile_function(&self, function: &FunctionDecl) {}
 
-    fn compile_type_decl(&'a mut self, typ: &TypeDecl) {
+    fn compile_type_decl(&mut self, typ: &TypeDecl) {
         let name = typ.name.clone();
         let value = &typ.value;
         let typ = self.compile_type(value).unwrap();
@@ -86,7 +86,7 @@ impl<'a> CodeGenerator<'a> {
         self.add_symbol(name, typ);
     }
 
-    fn compile_type(&self, typ: &Type) -> Result<BasicTypeEnum> {
+    fn compile_type(&self, typ: &Type) -> Result<BasicTypeEnum<'a>> {
         let scope = &self.symbols.peek().unwrap();
 
         match &*typ.shape {

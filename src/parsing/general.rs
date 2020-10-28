@@ -7,22 +7,15 @@ extern crate nom;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, char, line_ending, newline, one_of},
-    combinator::{map, opt},
+    character::complete::{alpha1, line_ending},
     error::VerboseError,
-    multi::separated_list,
-    sequence::{delimited, separated_pair, terminated, tuple},
     IResult,
 };
 
 // Adds whitespace in between symbols
 macro_rules! ws {
     ($x: expr) => {
-        nom::sequence::delimited(
-            nom::character::complete::multispace0,
-            $x,
-            nom::character::complete::multispace0,
-        )
+        nom::sequence::preceded(nom::character::complete::multispace0, $x)
     };
 }
 
@@ -52,10 +45,9 @@ pub fn identifier<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
 }
 
 pub fn line_terminator(input: &str) -> IResult<&str, ()> {
-    assert_eq!(
-        line_ending::<&str, VerboseError<&str>>("\r\nc"),
-        Ok(("c", "\r\n"))
-    );
+    if input == "" {
+        return Ok(("", ()));
+    }
 
     let ret = alt((ws!(tag(";")), line_ending))(input);
 
