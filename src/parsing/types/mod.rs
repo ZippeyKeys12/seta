@@ -31,7 +31,7 @@ impl fmt::Display for Type {
 }
 
 pub fn type_expr(input: &str) -> IResult<&str, Box<Type>> {
-    ws!(map(
+    map(
         tuple((ws!(shape_expr), opt(ws!(sec_type_expr)))),
         |(shpe, sec)| {
             Box::new(Type {
@@ -42,15 +42,11 @@ pub fn type_expr(input: &str) -> IResult<&str, Box<Type>> {
                 },
             })
         },
-    ))(input)
+    )(input)
 }
 
 pub fn type_spec(input: &str) -> IResult<&str, (&str, Box<Type>)> {
-    ws!(separated_pair(
-        ws!(identifier),
-        ws!(tag(":")),
-        ws!(type_expr)
-    ))(input)
+    separated_pair(ws!(identifier), ws!(tag(":")), ws!(type_expr))(input)
 }
 
 pub fn type_spec_list(input: &str) -> IResult<&str, HashMap<&str, Box<Type>>> {

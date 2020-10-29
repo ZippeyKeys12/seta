@@ -162,7 +162,7 @@ fn record_expr<'a>(
     let (input, pairs) = terminated(
         separated_list(
             ws!(tag(",")),
-            separated_pair(identifier, ws!(tag(":")), |i| parser.parse(i)),
+            separated_pair(ws!(identifier), ws!(tag(":")), |i| parser.parse(i)),
         ),
         ws!(tag(")")),
     )(input)?;

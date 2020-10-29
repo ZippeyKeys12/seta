@@ -27,6 +27,7 @@ impl<'r, T> PrattParser<'r, T> {
     }
 
     pub fn expression<'a>(&self, input: &'a str, precedence: u16) -> IResult<&'a str, T> {
+        let input = input.trim_start();
         for (tokenizer, parser) in self.prefixes {
             let res = tokenizer(input);
 
