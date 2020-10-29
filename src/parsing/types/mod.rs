@@ -71,6 +71,7 @@ pub fn type_decl(input: &str) -> IResult<&str, Definition> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use std::collections::HashSet;
 
     #[test]

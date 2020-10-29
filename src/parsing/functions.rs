@@ -59,3 +59,94 @@ pub fn function_sig(input: &str) -> FunctionResult {
         )),
     ))(input)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use super::super::types::{security::SecurityType, shapes::ShapeType};
+
+    #[test]
+    fn test_function_sig() {
+        let test_values = vec![
+            (
+                "fn a() -> A",
+                (
+                    "a",
+                    HashMap::<&str, Box<Type>>::new(),
+                    (
+                        "ret",
+                        Box::new(Type {
+                            shape: Box::new(ShapeType::Reference("A".to_string())),
+                            security: Box::new(SecurityType::Top),
+                        }),
+                    ),
+                ),
+            ),
+            (
+                "fn b(a: A) -> B",
+                (
+                    "b",
+                    {
+                        let mut map = HashMap::<&str, Box<Type>>::new();
+                        map.insert(
+                            "a",
+                            Box::new(Type {
+                                shape: Box::new(ShapeType::Reference("A".to_string())),
+                                security: Box::new(SecurityType::Top),
+                            }),
+                        );
+
+                        map
+                    },
+                    (
+                        "ret",
+                        Box::new(Type {
+                            shape: Box::new(ShapeType::Reference("B".to_string())),
+                            security: Box::new(SecurityType::Top),
+                        }),
+                    ),
+                ),
+            ),
+            (
+                "fn b(a: A, c: C {}) -> rt: B",
+                (
+                    "b",
+                    {
+                        let mut map = HashMap::<&str, Box<Type>>::new();
+                        map.insert(
+                            "a",
+                            Box::new(Type {
+                                shape: Box::new(ShapeType::Reference("A".to_string())),
+                                security: Box::new(SecurityType::Top),
+                            }),
+                        );
+                        map.insert(
+                            "c",
+                            Box::new(Type {
+                                shape: Box::new(ShapeType::Reference("C".to_string())),
+                                security: Box::new(SecurityType::Bottom),
+                            }),
+                        );
+
+                        map
+                    },
+                    (
+                        "rt",
+                        Box::new(Type {
+                            shape: Box::new(ShapeType::Reference("B".to_string())),
+                            security: Box::new(SecurityType::Top),
+                        }),
+                    ),
+                ),
+            ),
+        ];
+
+        for (test_val, ans) in test_values {
+            let (i, f) = function_sig(test_val).unwrap();
+
+            assert_eq!(f, ans);
+            assert_eq!(i, "");
+        }
+    }
+}
