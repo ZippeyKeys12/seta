@@ -6,13 +6,14 @@ pub mod shapes;
 use security::{sec_type_expr, SecurityType};
 use shapes::{shape_expr, ShapeType};
 
-use std::{collections::HashMap, fmt, iter::FromIterator};
+use std::{collections::HashMap, fmt, iter::FromIterator, str::FromStr};
 
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, newline},
+    combinator::{all_consuming, complete},
     combinator::{map, opt},
+    error::ErrorKind,
     multi::separated_list,
     sequence::{delimited, separated_pair, terminated, tuple},
     IResult,
@@ -22,6 +23,19 @@ use nom::{
 pub struct Type {
     pub shape: Box<ShapeType>,
     pub security: Box<SecurityType>,
+}
+
+impl<'a> FromStr for Type {
+    type Err = nom::Err<ErrorKind>;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match all_consuming(complete(type_expr))(input) {
+            Ok(ok) => Ok(*ok.1),
+            Err(nom::Err::Error(err)) => Err(nom::Err::Error(err.1)),
+            Err(nom::Err::Failure(err)) => Err(nom::Err::Failure(err.1)),
+            _ => Err(nom::Err::Error(ErrorKind::Eof)),
+        }
+    }
 }
 
 impl fmt::Display for Type {
@@ -44,6 +58,8 @@ pub fn type_expr(input: &str) -> IResult<&str, Box<Type>> {
         },
     )(input)
 }
+
+pub struct TypeSpec(String, Type);
 
 pub fn type_spec(input: &str) -> IResult<&str, (&str, Box<Type>)> {
     separated_pair(ws!(identifier), ws!(tag(":")), ws!(type_expr))(input)

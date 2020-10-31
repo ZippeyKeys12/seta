@@ -12,7 +12,7 @@ use nom::{
     combinator::{all_consuming, complete},
     error::ErrorKind,
     multi::separated_list,
-    sequence::{delimited, separated_pair, terminated},
+    sequence::{separated_pair, terminated},
     IResult,
 };
 

@@ -1,14 +1,35 @@
 use crate::parsing::general::identifier;
 
-use std::{collections::HashSet, fmt, iter::FromIterator};
+use std::{collections::HashSet, fmt, iter::FromIterator, str::FromStr};
 
-use nom::{branch::alt, bytes::complete::tag, multi::separated_list, sequence::delimited, IResult};
+use nom::{
+    branch::alt,
+    bytes::complete::tag,
+    combinator::{all_consuming, complete},
+    error::ErrorKind,
+    multi::separated_list,
+    sequence::delimited,
+    IResult,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SecurityType {
     Top,
     Literal(HashSet<String>),
     Bottom,
+}
+
+impl<'a> FromStr for SecurityType {
+    type Err = nom::Err<ErrorKind>;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match all_consuming(complete(sec_type_expr))(input) {
+            Ok(ok) => Ok(*ok.1),
+            Err(nom::Err::Error(err)) => Err(nom::Err::Error(err.1)),
+            Err(nom::Err::Failure(err)) => Err(nom::Err::Failure(err.1)),
+            _ => Err(nom::Err::Error(ErrorKind::Eof)),
+        }
+    }
 }
 
 impl fmt::Display for SecurityType {
@@ -90,25 +111,22 @@ mod tests {
 
     #[test]
     fn test_bottom() {
-        let (i, t) = sec_type_expr("{}").unwrap();
-        assert_eq!(*t, SecurityType::Bottom);
-        assert_eq!(i, "");
+        let t = "{}".parse::<SecurityType>().unwrap();
+        assert_eq!(t, SecurityType::Bottom);
 
-        let (i, t) = sec_type_expr("{ }").unwrap();
-        assert_eq!(*t, SecurityType::Bottom);
-        assert_eq!(i, "")
+        let t = "{ }".parse::<SecurityType>().unwrap();
+        assert_eq!(t, SecurityType::Bottom);
     }
 
     #[test]
     fn test_literal() {
-        let (i, t) = sec_type_expr("{A,B,C}").unwrap();
+        let t = "{A,B,C}".parse::<SecurityType>().unwrap();
 
         let mut tmp = HashSet::new();
         tmp.insert("A".to_string());
         tmp.insert("B".to_string());
         tmp.insert("C".to_string());
 
-        assert_eq!(*t, SecurityType::Literal(tmp));
-        assert_eq!(i, "")
+        assert_eq!(t, SecurityType::Literal(tmp));
     }
 }
