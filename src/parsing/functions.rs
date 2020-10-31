@@ -1,8 +1,10 @@
 use super::{
     docs::docstring,
     expression::{val_expr, Expression},
-    general::{identifier, Definition, FunctionDecl},
-    types::{type_expr, type_spec, type_spec_list, Type},
+    general::{identifier, line_terminator, Definition, FunctionDecl},
+    types::{
+        security::SecurityType, shapes::ShapeType, type_expr, type_spec, type_spec_list, Type,
+    },
 };
 
 use std::collections::HashMap;
@@ -19,11 +21,12 @@ use nom::{
 };
 
 pub fn function_decl(input: &str) -> IResult<&str, Definition> {
-    let (input, (doc, (name, arguments, ret), _, body)) = tuple((
+    let (input, (doc, (name, arguments, ret), _, body, _)) = tuple((
         opt(ws!(docstring)),
         ws!(function_sig),
         ws!(tag("=")),
         ws!(val_expr),
+        opt(ws!(line_terminator)),
     ))(input)?;
 
     let mut map = HashMap::<String, Box<Type>>::new();
@@ -52,11 +55,23 @@ pub fn function_sig(input: &str) -> FunctionResult {
         ws!(preceded(ws!(tag("fn")), ws!(identifier))),
         // Parameters
         ws!(delimited(ws!(tag("(")), type_spec_list, ws!(tag(")")))),
-        ws!(preceded(
-            ws!(tag("->")),
-            // Gets name for return value, or defaults to 'ret'
-            ws!(alt((ws!(type_spec), ws!(map(type_expr, |i| ("ret", i)))))),
-        )),
+        ws!(alt((
+            preceded(
+                tag("->"),
+                // Gets name for return value, or defaults to 'ret'
+                ws!(alt((type_spec, map(type_expr, |i| ("ret", i))))),
+            ),
+            |i| Ok((
+                i,
+                (
+                    "ret",
+                    Box::new(Type {
+                        shape: Box::new("Unit".parse::<ShapeType>().unwrap()),
+                        security: Box::new(SecurityType::Top)
+                    })
+                )
+            ))
+        ))),
     ))(input)
 }
 
@@ -109,9 +124,9 @@ mod tests {
                 ),
             ),
             (
-                "fn b(a: A, c: C {}) -> rt: B",
+                "fn bc(a: A, c: C {}) -> rt: B",
                 (
-                    "b",
+                    "bc",
                     {
                         let mut map = HashMap::<&str, Box<Type>>::new();
                         map.insert(
@@ -144,6 +159,85 @@ mod tests {
 
         for (test_val, ans) in test_values {
             let (i, f) = function_sig(test_val).unwrap();
+
+            assert_eq!(f, ans);
+            assert_eq!(i, "");
+        }
+    }
+
+    #[test]
+    fn test_function_decl() {
+        let test_values = vec![
+            (
+                "fn a() -> B = 1",
+                Definition::Function(FunctionDecl {
+                    doc: None,
+                    name: "a".to_string(),
+                    parameters: HashMap::new(),
+                    ret: ("ret".to_string(), Box::new("B".parse::<Type>().unwrap())),
+                    body: Box::new(Expression::IntLiteral(1)),
+                }),
+            ),
+            (
+                "fn abc(a: Int, b: Int {}) = 1",
+                Definition::Function(FunctionDecl {
+                    doc: None,
+                    name: "abc".to_string(),
+                    parameters: {
+                        let mut map = HashMap::<String, Box<Type>>::new();
+                        map.insert(
+                            "a".to_string(),
+                            Box::new(Type {
+                                shape: Box::new(ShapeType::Reference("Int".to_string())),
+                                security: Box::new(SecurityType::Top),
+                            }),
+                        );
+                        map.insert(
+                            "b".to_string(),
+                            Box::new(Type {
+                                shape: Box::new(ShapeType::Reference("Int".to_string())),
+                                security: Box::new(SecurityType::Bottom),
+                            }),
+                        );
+
+                        map
+                    },
+                    ret: ("ret".to_string(), Box::new("Unit".parse::<Type>().unwrap())),
+                    body: Box::new(Expression::IntLiteral(1)),
+                }),
+            ),
+            (
+                "fn abc(a: A {}, b: B) -> Int = 1;",
+                Definition::Function(FunctionDecl {
+                    doc: None,
+                    name: "abc".to_string(),
+                    parameters: {
+                        let mut map = HashMap::<String, Box<Type>>::new();
+                        map.insert(
+                            "a".to_string(),
+                            Box::new(Type {
+                                shape: Box::new(ShapeType::Reference("A".to_string())),
+                                security: Box::new(SecurityType::Bottom),
+                            }),
+                        );
+                        map.insert(
+                            "b".to_string(),
+                            Box::new(Type {
+                                shape: Box::new(ShapeType::Reference("B".to_string())),
+                                security: Box::new(SecurityType::Top),
+                            }),
+                        );
+
+                        map
+                    },
+                    ret: ("ret".to_string(), Box::new("Int".parse::<Type>().unwrap())),
+                    body: Box::new(Expression::IntLiteral(1)),
+                }),
+            ),
+        ];
+
+        for (test_val, ans) in test_values {
+            let (i, f) = function_decl(test_val).unwrap();
 
             assert_eq!(f, ans);
             assert_eq!(i, "");
