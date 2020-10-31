@@ -59,16 +59,24 @@ pub fn type_expr(input: &str) -> IResult<&str, Box<Type>> {
     )(input)
 }
 
-pub struct TypeSpec(String, Type);
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypeSpec(pub String, pub Type);
 
-pub fn type_spec(input: &str) -> IResult<&str, (&str, Box<Type>)> {
-    separated_pair(ws!(identifier), ws!(tag(":")), ws!(type_expr))(input)
+pub fn type_spec(input: &str) -> IResult<&str, TypeSpec> {
+    let (input, (name, t)) = separated_pair(ws!(identifier), ws!(tag(":")), ws!(type_expr))(input)?;
+    Ok((input, TypeSpec(name.to_string(), *t)))
 }
 
-pub fn type_spec_list(input: &str) -> IResult<&str, HashMap<&str, Box<Type>>> {
+pub fn type_spec_list(input: &str) -> IResult<&str, HashMap<String, Type>> {
     let (input, list) = ws!(separated_list(ws!(tag(",")), ws!(type_spec)))(input)?;
 
-    Ok((input, HashMap::from_iter(list)))
+    Ok((
+        input,
+        list.iter()
+            .cloned()
+            .map(|v| (v.0.to_string(), v.1))
+            .collect(),
+    ))
 }
 
 pub fn type_decl(input: &str) -> IResult<&str, Definition> {

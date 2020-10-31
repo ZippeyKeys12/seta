@@ -1,5 +1,5 @@
 use super::expression::Expression;
-use super::types::{type_expr, Type};
+use super::types::{type_expr, Type, TypeSpec};
 
 use std::collections::HashMap;
 
@@ -29,8 +29,8 @@ pub enum Definition {
 pub struct FunctionDecl {
     pub doc: Option<toml::Value>,
     pub name: String,
-    pub parameters: HashMap<String, Box<Type>>,
-    pub ret: (String, Box<Type>),
+    pub parameters: HashMap<String, Type>,
+    pub ret: TypeSpec,
     pub body: Box<Expression>,
 }
 

@@ -8,7 +8,9 @@ use nom::{
     IResult,
 };
 
-pub fn docstring(input: &str) -> IResult<&str, toml::Value> {
+pub type Doc = toml::Value;
+
+pub fn docstring(input: &str) -> IResult<&str, Doc> {
     let (input, data) = delimited(
         context("Start of docstring", tag("---")),
         take_until("---"),

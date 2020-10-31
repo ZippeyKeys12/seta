@@ -1,9 +1,10 @@
 use super::{
     docs::docstring,
-    expression::{val_expr, Expression},
+    expression::val_expr,
     general::{identifier, line_terminator, Definition, FunctionDecl},
     types::{
         security::SecurityType, shapes::ShapeType, type_expr, type_spec, type_spec_list, Type,
+        TypeSpec,
     },
 };
 
@@ -21,7 +22,7 @@ use nom::{
 };
 
 pub fn function_decl(input: &str) -> IResult<&str, Definition> {
-    let (input, (doc, (name, arguments, ret), _, body, _)) = tuple((
+    let (input, (doc, (name, parameters, ret), _, body, _)) = tuple((
         opt(ws!(docstring)),
         ws!(function_sig),
         ws!(tag("=")),
@@ -29,26 +30,19 @@ pub fn function_decl(input: &str) -> IResult<&str, Definition> {
         opt(ws!(line_terminator)),
     ))(input)?;
 
-    let mut map = HashMap::<String, Box<Type>>::new();
-
-    for (k, v) in arguments {
-        map.insert(k.to_string(), v);
-    }
-
     Ok((
         input,
         Definition::Function(FunctionDecl {
             doc,
             name: name.to_string(),
-            parameters: map,
-            ret: (ret.0.to_string(), ret.1),
+            parameters,
+            ret,
             body,
         }),
     ))
 }
 
-type FunctionResult<'a> =
-    IResult<&'a str, (&'a str, HashMap<&'a str, Box<Type>>, (&'a str, Box<Type>))>;
+type FunctionResult<'a> = IResult<&'a str, (&'a str, HashMap<String, Type>, TypeSpec)>;
 
 pub fn function_sig(input: &str) -> FunctionResult {
     tuple((
@@ -59,16 +53,19 @@ pub fn function_sig(input: &str) -> FunctionResult {
             preceded(
                 tag("->"),
                 // Gets name for return value, or defaults to 'ret'
-                ws!(alt((type_spec, map(type_expr, |i| ("ret", i))))),
+                ws!(alt((
+                    type_spec,
+                    map(type_expr, |i| TypeSpec("ret".to_string(), *i))
+                ))),
             ),
             |i| Ok((
                 i,
-                (
-                    "ret",
-                    Box::new(Type {
+                TypeSpec(
+                    "ret".to_string(),
+                    Type {
                         shape: Box::new("Unit".parse::<ShapeType>().unwrap()),
                         security: Box::new(SecurityType::Top)
-                    })
+                    }
                 )
             ))
         ))),
@@ -79,7 +76,10 @@ pub fn function_sig(input: &str) -> FunctionResult {
 mod tests {
     use super::*;
 
-    use super::super::types::{security::SecurityType, shapes::ShapeType};
+    use crate::parsing::{
+        types::{security::SecurityType, shapes::ShapeType},
+        Expression,
+    };
 
     #[test]
     fn test_function_sig() {
@@ -88,13 +88,13 @@ mod tests {
                 "fn a() -> A",
                 (
                     "a",
-                    HashMap::<&str, Box<Type>>::new(),
-                    (
-                        "ret",
-                        Box::new(Type {
+                    HashMap::<String, Type>::new(),
+                    TypeSpec(
+                        "ret".to_string(),
+                        Type {
                             shape: Box::new(ShapeType::Reference("A".to_string())),
                             security: Box::new(SecurityType::Top),
-                        }),
+                        },
                     ),
                 ),
             ),
@@ -103,23 +103,23 @@ mod tests {
                 (
                     "b",
                     {
-                        let mut map = HashMap::<&str, Box<Type>>::new();
+                        let mut map = HashMap::<String, Type>::new();
                         map.insert(
-                            "a",
-                            Box::new(Type {
+                            "a".to_string(),
+                            Type {
                                 shape: Box::new(ShapeType::Reference("A".to_string())),
                                 security: Box::new(SecurityType::Top),
-                            }),
+                            },
                         );
 
                         map
                     },
-                    (
-                        "ret",
-                        Box::new(Type {
+                    TypeSpec(
+                        "ret".to_string(),
+                        Type {
                             shape: Box::new(ShapeType::Reference("B".to_string())),
                             security: Box::new(SecurityType::Top),
-                        }),
+                        },
                     ),
                 ),
             ),
@@ -128,30 +128,30 @@ mod tests {
                 (
                     "bc",
                     {
-                        let mut map = HashMap::<&str, Box<Type>>::new();
+                        let mut map = HashMap::<String, Type>::new();
                         map.insert(
-                            "a",
-                            Box::new(Type {
+                            "a".to_string(),
+                            Type {
                                 shape: Box::new(ShapeType::Reference("A".to_string())),
                                 security: Box::new(SecurityType::Top),
-                            }),
+                            },
                         );
                         map.insert(
-                            "c",
-                            Box::new(Type {
+                            "c".to_string(),
+                            Type {
                                 shape: Box::new(ShapeType::Reference("C".to_string())),
                                 security: Box::new(SecurityType::Bottom),
-                            }),
+                            },
                         );
 
                         map
                     },
-                    (
-                        "rt",
-                        Box::new(Type {
+                    TypeSpec(
+                        "rt".to_string(),
+                        Type {
                             shape: Box::new(ShapeType::Reference("B".to_string())),
                             security: Box::new(SecurityType::Top),
-                        }),
+                        },
                     ),
                 ),
             ),
@@ -174,7 +174,7 @@ mod tests {
                     doc: None,
                     name: "a".to_string(),
                     parameters: HashMap::new(),
-                    ret: ("ret".to_string(), Box::new("B".parse::<Type>().unwrap())),
+                    ret: TypeSpec("ret".to_string(), "B".parse::<Type>().unwrap()),
                     body: Box::new(Expression::IntLiteral(1)),
                 }),
             ),
@@ -184,25 +184,25 @@ mod tests {
                     doc: None,
                     name: "abc".to_string(),
                     parameters: {
-                        let mut map = HashMap::<String, Box<Type>>::new();
+                        let mut map = HashMap::<String, Type>::new();
                         map.insert(
                             "a".to_string(),
-                            Box::new(Type {
+                            Type {
                                 shape: Box::new(ShapeType::Reference("Int".to_string())),
                                 security: Box::new(SecurityType::Top),
-                            }),
+                            },
                         );
                         map.insert(
                             "b".to_string(),
-                            Box::new(Type {
+                            Type {
                                 shape: Box::new(ShapeType::Reference("Int".to_string())),
                                 security: Box::new(SecurityType::Bottom),
-                            }),
+                            },
                         );
 
                         map
                     },
-                    ret: ("ret".to_string(), Box::new("Unit".parse::<Type>().unwrap())),
+                    ret: TypeSpec("ret".to_string(), "Unit".parse::<Type>().unwrap()),
                     body: Box::new(Expression::IntLiteral(1)),
                 }),
             ),
@@ -212,25 +212,25 @@ mod tests {
                     doc: None,
                     name: "abc".to_string(),
                     parameters: {
-                        let mut map = HashMap::<String, Box<Type>>::new();
+                        let mut map = HashMap::<String, Type>::new();
                         map.insert(
                             "a".to_string(),
-                            Box::new(Type {
+                            Type {
                                 shape: Box::new(ShapeType::Reference("A".to_string())),
                                 security: Box::new(SecurityType::Bottom),
-                            }),
+                            },
                         );
                         map.insert(
                             "b".to_string(),
-                            Box::new(Type {
+                            Type {
                                 shape: Box::new(ShapeType::Reference("B".to_string())),
                                 security: Box::new(SecurityType::Top),
-                            }),
+                            },
                         );
 
                         map
                     },
-                    ret: ("ret".to_string(), Box::new("Int".parse::<Type>().unwrap())),
+                    ret: TypeSpec("ret".to_string(), "Int".parse::<Type>().unwrap()),
                     body: Box::new(Expression::IntLiteral(1)),
                 }),
             ),
