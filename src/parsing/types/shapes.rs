@@ -28,7 +28,7 @@ pub enum ShapeType {
     Reference(String),
 }
 
-impl<'a> FromStr for ShapeType {
+impl FromStr for ShapeType {
     type Err = nom::Err<ErrorKind>;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {

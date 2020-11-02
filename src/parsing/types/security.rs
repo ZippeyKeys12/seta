@@ -19,7 +19,7 @@ pub enum SecurityType {
     Bottom,
 }
 
-impl<'a> FromStr for SecurityType {
+impl FromStr for SecurityType {
     type Err = nom::Err<ErrorKind>;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {

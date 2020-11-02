@@ -3,12 +3,16 @@ use crate::parsing::{
     pratt::{PrattParser, MAX_PRECEDENCE},
 };
 
+use std::str::FromStr;
+
 extern crate nom;
 use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::digit1,
+    combinator::{all_consuming, complete},
     combinator::{map, opt},
+    error::ErrorKind,
     multi::separated_list,
     sequence::{delimited, preceded, terminated, tuple},
     IResult,
@@ -30,6 +34,19 @@ pub enum Expression {
     Reference(String),
     FunctionCall(String, Vec<Expression>),
     Dot(Box<Expression>, Box<Expression>),
+}
+
+impl FromStr for Expression {
+    type Err = nom::Err<ErrorKind>;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match all_consuming(complete(val_expr))(input) {
+            Ok(ok) => Ok(*ok.1),
+            Err(nom::Err::Error(err)) => Err(nom::Err::Error(err.1)),
+            Err(nom::Err::Failure(err)) => Err(nom::Err::Failure(err.1)),
+            _ => Err(nom::Err::Error(ErrorKind::Eof)),
+        }
+    }
 }
 
 pub fn val_expr(input: &str) -> IResult<&str, Box<Expression>> {
@@ -246,9 +263,7 @@ mod tests {
             let (i, t) = val_expr(test_val).unwrap();
             assert_eq!(
                 *t,
-                Expression::Negation(Box::new(Expression::IntLiteral(
-                    test_val[1..].parse().unwrap()
-                )))
+                Expression::Negation(Box::new(test_val[1..].parse().unwrap()))
             );
             assert_eq!(i, "")
         }
@@ -268,9 +283,7 @@ mod tests {
             let (i, t) = val_expr(test_val).unwrap();
             assert_eq!(
                 *t,
-                Expression::Inversion(Box::new(Expression::IntLiteral(
-                    test_val[1..].parse().unwrap()
-                )))
+                Expression::Inversion(Box::new(test_val[1..].parse().unwrap()))
             );
             assert_eq!(i, "")
         }
@@ -290,9 +303,7 @@ mod tests {
             let (i, t) = val_expr(test_val).unwrap();
             assert_eq!(
                 *t,
-                Expression::Not(Box::new(Expression::IntLiteral(
-                    test_val[1..].parse().unwrap()
-                )))
+                Expression::Not(Box::new(test_val[1..].parse().unwrap()))
             );
             assert_eq!(i, "")
         }
@@ -398,8 +409,7 @@ mod tests {
 
         for test_val in test_values {
             let (i, t) = val_expr(test_val).unwrap();
-            assert_eq!(*t, Expression::Reference(test_val.to_string()));
-            assert_eq!(i, "")
+            assert_eq!(*t, test_val.parse().unwrap())
         }
     }
 
