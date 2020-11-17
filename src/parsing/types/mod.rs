@@ -25,7 +25,7 @@ pub struct Type {
     pub security: Box<SecurityType>,
 }
 
-impl<'a> FromStr for Type {
+impl FromStr for Type {
     type Err = nom::Err<ErrorKind>;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
@@ -40,7 +40,7 @@ impl<'a> FromStr for Type {
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}", self.shape, self.security)
+        write!(f, "{} {}", self.shape, self.security)
     }
 }
 
@@ -61,6 +61,19 @@ pub fn type_expr(input: &str) -> IResult<&str, Box<Type>> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypeSpec(pub String, pub Type);
+
+impl FromStr for TypeSpec {
+    type Err = nom::Err<ErrorKind>;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match all_consuming(complete(type_spec))(input) {
+            Ok(ok) => Ok(ok.1),
+            Err(nom::Err::Error(err)) => Err(nom::Err::Error(err.1)),
+            Err(nom::Err::Failure(err)) => Err(nom::Err::Failure(err.1)),
+            _ => Err(nom::Err::Error(ErrorKind::Eof)),
+        }
+    }
+}
 
 pub fn type_spec(input: &str) -> IResult<&str, TypeSpec> {
     let (input, (name, t)) = separated_pair(ws!(identifier), ws!(tag(":")), ws!(type_expr))(input)?;

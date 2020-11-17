@@ -79,15 +79,9 @@ fn int_literal<'a>(input: &'a str) -> IResult<&'a str, &'a str> {
     match INT_LITERAL_PATTERN.find(input) {
         Some(mat) => match mat.as_str().parse::<i32>() {
             Ok(_) => Ok((&input[mat.end()..], mat.as_str())),
-            _ => Err(nom::Err::Error((
-                "Integer not i32",
-                nom::error::ErrorKind::Digit,
-            ))),
+            _ => Err(anyhow!("Integer not i32")),
         },
-        _ => Err(nom::Err::Error((
-            "Not an integer",
-            nom::error::ErrorKind::Digit,
-        ))),
+        _ => anyhow!("Not an integer"),
     }
 }
 
@@ -139,10 +133,7 @@ fn prefix_expr<'a>(
             Ok((input, Box::new(Expression::Not(shape))))
         }
 
-        _ => Result::Err(nom::Err::Error((
-            "Unknown type operator",
-            nom::error::ErrorKind::Alt,
-        ))),
+        _ => anyhow!("Unknown type operator"),
     }
 }
 
@@ -197,10 +188,7 @@ fn infix_expr<'a>(
             Ok((input, Box::new(Expression::Division(left, expr))))
         }
 
-        _ => Result::Err(nom::Err::Error((
-            "Unknown operator",
-            nom::error::ErrorKind::Alt,
-        ))),
+        _ => anyhow!("Unknown operator"),
     }
 }
 

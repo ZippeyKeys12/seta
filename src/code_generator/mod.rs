@@ -6,7 +6,7 @@ use crate::{
     util::Stack,
 };
 
-use std::{collections::HashMap, error::Error, path::Path};
+use std::{collections::HashMap, path::Path};
 
 use anyhow::Result;
 
@@ -14,10 +14,9 @@ extern crate inkwell;
 use inkwell::{
     builder::Builder,
     context::Context,
-    execution_engine::{ExecutionEngine, JitFunction},
+    execution_engine::ExecutionEngine,
     module::Module,
-    support::LLVMString,
-    targets::{InitializationConfig, Target},
+    targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine},
     types::{AnyTypeEnum, BasicType, BasicTypeEnum},
     values::IntValue,
     OptimizationLevel,
@@ -32,12 +31,11 @@ pub struct CodeGenerator<'a> {
 }
 
 impl<'a> CodeGenerator<'a> {
-    pub fn new<'b>(
-        context: &'b Context,
-        module_name: &'b str,
-    ) -> Result<CodeGenerator<'b>, LLVMString> {
+    pub fn new<'b>(context: &'b Context, module_name: &'b str) -> Result<CodeGenerator<'b>> {
         let module = context.create_module(module_name);
-        let execution_engine = module.create_execution_engine()?;
+        let execution_engine = module
+            .create_execution_engine()
+            .map_err(|e| anyhow!(format!("{:?}", e)))?;
 
         // Return
         Ok(CodeGenerator {
@@ -49,36 +47,74 @@ impl<'a> CodeGenerator<'a> {
         })
     }
 
-    pub fn add_symbol(&mut self, key: String, symbol: &'a dyn BasicType<'a>) {
-        self.symbols.peek_mut().unwrap().insert(key, symbol);
+    pub fn add_symbol(&mut self, key: String, symbol: &'a dyn BasicType<'a>) -> Result<()> {
+        self.symbols
+            .peek_mut()
+            .ok_or_else(|| anyhow!("Scope is empty"))?
+            .insert(key, symbol);
+
+        Ok(())
     }
 
-    pub fn add_symbols(&mut self, symbols: HashMap<String, &'a dyn BasicType<'a>>) {
+    pub fn add_symbols(&mut self, symbols: HashMap<String, &'a dyn BasicType<'a>>) -> Result<()> {
         for (k, symbol) in symbols {
-            self.add_symbol(k, symbol)
-        }
-    }
+            let res = self.add_symbol(k, symbol);
 
-    pub fn save(&self, path: &Path) -> bool {
-        self.module.write_bitcode_to_path(path)
-    }
-
-    pub fn compile(&mut self, compilation_unit: &CompilationUnit) {
-        for d in &compilation_unit.definitions {
-            if let Definition::Type(typ) = d {
-                self.compile_type_decl(typ)
+            if res.is_err() {
+                return res;
             }
         }
+
+        Ok(())
+    }
+
+    pub fn compile(&mut self, filename: &str, compilation_unit: &CompilationUnit) -> Result<()> {
+        for d in &compilation_unit.definitions {
+            if let Definition::Type(typ) = d {
+                self.compile_type_decl(typ)?
+            }
+        }
+
+        for d in &compilation_unit.definitions {
+            if let Definition::Function(function) = d {
+                self.compile_function(function)?
+            }
+        }
+
+        Target::initialize_all(&InitializationConfig::default());
+
+        let target_triple = TargetMachine::get_default_triple();
+
+        let target =
+            Target::from_triple(&target_triple).map_err(|e| anyhow!(format!("{:?}", e)))?;
+        let target_machine = target
+            .create_target_machine(
+                &target_triple,
+                "generic",
+                "",
+                OptimizationLevel::Default,
+                RelocMode::Default,
+                CodeModel::Default,
+            )
+            .ok_or_else(|| anyhow!("Unable to create target machine!"))?;
+
+        target_machine
+            .write_to_file(&self.module, FileType::Object, filename.as_ref())
+            .map_err(|e| anyhow!(format!("{:?}", e)))?;
+
+        Ok(())
     }
 
     fn compile_function(&self, function: &FunctionDecl) {}
 
-    fn compile_type_decl(&mut self, typ: &TypeDecl) {
+    fn compile_type_decl(&mut self, typ: &TypeDecl) -> Result<()> {
         let name = typ.name.clone();
         let value = &typ.value;
         let typ = self.compile_type(value).unwrap();
 
         self.add_symbol(name, typ);
+
+        Ok(())
     }
 
     fn compile_type(&self, typ: &Type) -> Result<&'a dyn BasicType<'a>> {
@@ -86,12 +122,12 @@ impl<'a> CodeGenerator<'a> {
 
         match &*typ.shape {
             ShapeType::Reference(reference) => Ok(*scope.get(reference).unwrap()),
-            _ => Err(anyhow!("Placeholder")),
+            _ => Err(anyhow!("Invalid Type (This should never be seen)")),
         }
     }
 }
 
-pub fn compile(path: &Path, compilation_unit: CompilationUnit) -> Result<(), LLVMString> {
+pub fn compile(path: &Path, compilation_unit: CompilationUnit) -> Result<()> {
     let context = Context::create();
 
     // Build builtins
@@ -104,8 +140,7 @@ pub fn compile(path: &Path, compilation_unit: CompilationUnit) -> Result<(), LLV
     let mut code_generator = CodeGenerator::new(&context, "main")?;
     code_generator.add_symbols(builtins);
 
-    code_generator.compile(&compilation_unit);
-    code_generator.save(path);
+    let target_machine = code_generator.compile("a.out", &compilation_unit);
 
     Ok(())
 }

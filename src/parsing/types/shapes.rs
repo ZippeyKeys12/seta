@@ -139,10 +139,7 @@ fn tuple_expr<'a>(
     )(input)?;
 
     if vals.is_empty() {
-        return Err(nom::Err::Error((
-            "Empty Tuple (This should never be seen)",
-            nom::error::ErrorKind::Alt,
-        )));
+        return anyhow!("Empty Tuple (This should never be seen)");
     };
 
     let mut res: Vec<ShapeType> = Vec::with_capacity(vals.len());
@@ -168,10 +165,7 @@ fn record_expr<'a>(
     )(input)?;
 
     if pairs.is_empty() {
-        return Err(nom::Err::Error((
-            "Empty Record (This should never be seen)",
-            nom::error::ErrorKind::Alt,
-        )));
+        return anyhow!("Empty Record (This should never be seen)");
     }
 
     let mut map = HashMap::<String, ShapeType>::with_capacity(pairs.len());
@@ -194,10 +188,7 @@ fn prefix_expr<'a>(
             Ok((input, Box::new(ShapeType::Negation(shape))))
         }
 
-        _ => Result::Err(nom::Err::Error((
-            "Unknown type operator",
-            nom::error::ErrorKind::Alt,
-        ))),
+        _ => anyhow!("Unknown type operator"),
     }
 }
 
@@ -224,10 +215,7 @@ fn infix_expr<'a>(
             Ok((input, Box::new(ShapeType::Union(left, shape))))
         }
 
-        _ => Result::Err(nom::Err::Error((
-            "Unknown type operator",
-            nom::error::ErrorKind::Alt,
-        ))),
+        _ => anyhow!("Unknown type operator"),
     }
 }
 

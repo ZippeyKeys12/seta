@@ -34,21 +34,23 @@ impl FromStr for SecurityType {
 
 impl fmt::Display for SecurityType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        if let Err(a) = write!(f, "{{") {
-            return Err(a);
+        let res = write!(f, "{{");
+        if res.is_err() {
+            return res;
         };
 
         match self {
             SecurityType::Top => {
-                if let Err(a) = write!(f, "_") {
+                let res = write!(f, "_");
+                if res.is_err() {
                     {
-                        return Err(a);
+                        return res;
                     }
                 }
             }
 
             SecurityType::Literal(classes) => {
-                if let Err(a) = write!(
+                let res = write!(
                     f,
                     "{}",
                     classes
@@ -62,8 +64,10 @@ impl fmt::Display for SecurityType {
                             };
                             a
                         })
-                ) {
-                    return Err(a);
+                );
+
+                if res.is_err() {
+                    return res;
                 }
             }
 

@@ -54,10 +54,7 @@ impl<'r, T> PrattParser<'r, T> {
             }
         }
 
-        Err(nom::Err::Error((
-            "No expression found",
-            nom::error::ErrorKind::Alt,
-        )))
+        anyhow!("No expression found")
     }
 
     fn get_precedence<'a>(&self, input: &'a str) -> u16 {
