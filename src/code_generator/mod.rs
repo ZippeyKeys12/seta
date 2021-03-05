@@ -105,7 +105,50 @@ impl<'a> CodeGenerator<'a> {
         Ok(())
     }
 
-    fn compile_function(&self, function: &FunctionDecl) {}
+    fn compile_function(&self, function: &FunctionDecl) -> Result<()> {
+        let scope = &self.symbols.peek().unwrap();
+
+        let FunctionDecl {
+            doc,
+            name,
+            parameters,
+            ret,
+            body,
+        } = function;
+
+        let ret_type = self.compile_type(&ret.1)?;
+        let fn_type = ret_type.fn_type(
+            parameters
+                .iter()
+                .map(|(_, v)| self.compile_type(v).unwrap().as_basic_type_enum())
+                .collect::<Vec<_>>()
+                .as_slice(),
+            false,
+        );
+
+        let name = name.as_str();
+        let function = self.module.add_function(name, fn_type, None);
+        let basic_block = self.context.append_basic_block(function, "entry");
+
+        self.builder.position_at_end(basic_block);
+
+        let x = function.get_nth_param(0).unwrap().into_int_value();
+        let y = function.get_nth_param(1).unwrap().into_int_value();
+
+        let sum = self.builder.build_int_add(x, y, name);
+        self.builder.build_return(Some(&sum));
+
+        // println!("a {}", name);
+        // unsafe {
+        //     let ex = self
+        //         .execution_engine
+        //         .get_function::<unsafe extern "C" fn(i32, i32) -> i32>("abc")?;
+        //     println!("{}", ex.call(1, 2));
+        // }
+        // println!("b");
+
+        Ok(())
+    }
 
     fn compile_type_decl(&mut self, typ: &TypeDecl) -> Result<()> {
         let name = typ.name.clone();
