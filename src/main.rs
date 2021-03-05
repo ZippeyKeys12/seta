@@ -1,34 +1,28 @@
-use std::{fs::File, io::prelude::*, path::Path};
+use std::{
+    fs::File,
+    io::{self, prelude::*, Write},
+    path::Path,
+};
 
 extern crate clap;
 use clap::{App, Arg, SubCommand};
 
-extern crate nom;
-use nom::{
-    branch::alt,
-    bytes::complete::tag,
-    combinator::opt,
-    multi::many0,
-    sequence::{delimited, tuple},
-};
+extern crate logos;
 
-#[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 extern crate anyhow;
 
-#[macro_use]
-mod parsing;
-use parsing::{compilation_unit, CompilationUnit};
+mod lexer;
 
-mod code_generator;
-use code_generator::compile;
+mod parser;
+use parser::Parser;
+
+// mod code_generator;
+// use code_generator::compile;
 
 mod util;
-mod visitor;
+// mod visitor;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let app_m = App::new("Seta")
         .version("0.0.1")
         .author("Zain Aamer <zippeykeys12@gmail.com>")
@@ -56,9 +50,22 @@ fn main() {
 
     match app_m.subcommand() {
         ("check", Some(sub_m)) => check(sub_m.value_of("FILE").unwrap()),
+        // ("check", Some(sub_m)) => {
+        //     let mut contents = String::new();
+        //     let file = {
+        //         let mut file = File::open(sub_m.value_of("FILE").unwrap()).unwrap();
+        //         file.read_to_string(&mut contents).unwrap();
+        //         contents.as_str()
+        //     };
+        //     let program = compilation_unit(file);
+        //     assert_eq!(s, "");
+        // }
         ("build", Some(sub_m)) => build(sub_m.value_of("FILE").unwrap()),
+        ("", _) => repl()?,
         _ => {}
     };
+
+    Ok(())
 }
 
 fn build(filename: &str) {
@@ -69,12 +76,12 @@ fn build(filename: &str) {
         contents.as_str()
     };
 
-    let program = parse(file);
+    // let program = parse(file);
 
     let mut path = Path::new(filename).to_path_buf();
-    path.set_extension(".out");
+    path.set_extension("out");
 
-    compile(path.as_path(), program);
+    // compile(path.as_path(), program).unwrap()
 }
 
 fn check(filename: &str) {
@@ -85,18 +92,28 @@ fn check(filename: &str) {
         contents.as_str()
     };
 
-    // match r {
-    //     Ok((a, b)) => {
-    //         println!("a: {}", a);
-    //         println!("b: {}", b);
-    //     }
-    parse(file);
+    // parse(file);
 }
 
-    //     Err(e) => println!("{}", e),
-    // }
-fn parse(file: &str) -> CompilationUnit {
-    let (s, comp_unit) = compilation_unit(file).unwrap();
-    assert_eq!(s, "");
-    comp_unit
+fn repl() -> io::Result<()> {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+
+    let mut input = String::new();
+
+    loop {
+        print!("> ");
+        stdout.flush()?;
+
+        stdin.read_line(&mut input)?;
+
+        let res = Parser::new(&input).parse();
+        println!("{:#?}", res);
+
+        input.clear();
+    }
 }
+
+// fn parse(file: &str) -> CompilationUnit {
+//     file.parse::<CompilationUnit>().unwrap()
+// }
