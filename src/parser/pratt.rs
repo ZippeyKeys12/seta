@@ -43,7 +43,7 @@ impl<'a> Parser<'a> {
     where
         Op: PrattOp,
     {
-        self.pratt_parse_prec(pratt, MAX_PRECEDENCE);
+        self.pratt_parse_prec(pratt, 0);
     }
 
     fn pratt_parse_prec<Op>(&mut self, pratt: &dyn PrattParser<Op = Op>, precedence: u8)
