@@ -1,26 +1,18 @@
+extern crate anyhow;
+extern crate clap;
+extern crate logos;
+
+mod lexer;
+mod parser;
+mod util;
+
+use clap::{App, Arg, SubCommand};
+use parser::Parser;
 use std::{
     fs::File,
     io::{self, prelude::*, Write},
     path::Path,
 };
-
-extern crate clap;
-use clap::{App, Arg, SubCommand};
-
-extern crate logos;
-
-extern crate anyhow;
-
-mod lexer;
-
-mod parser;
-use parser::Parser;
-
-// mod code_generator;
-// use code_generator::compile;
-
-mod util;
-// mod visitor;
 
 fn main() -> anyhow::Result<()> {
     let app_m = App::new("Seta")
@@ -107,7 +99,7 @@ fn repl() -> io::Result<()> {
 
         stdin.read_line(&mut input)?;
 
-        let res = Parser::new(&input).parse();
+        let res = Parser::new(&input);
         println!("{:#?}", res);
 
         input.clear();

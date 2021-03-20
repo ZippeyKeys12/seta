@@ -1,9 +1,8 @@
-use num_traits::{FromPrimitive, ToPrimitive};
-use rowan::{GreenNode, GreenNodeBuilder, Language, SyntaxKind, SyntaxNode};
-
-use std::{fmt, iter::Peekable};
-
 use crate::lexer::{Lexer, Token};
+use crate::parser::ParseResult;
+use num_traits::{FromPrimitive, ToPrimitive};
+use rowan::{Checkpoint, GreenNodeBuilder, Language, SyntaxKind};
+use std::iter::Peekable;
 
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
@@ -11,14 +10,16 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: &'a str) -> Self {
-        Self {
+    pub fn new(input: &'a str) -> ParseResult {
+        let tmp = Self {
             lexer: Lexer::new(input).peekable(),
             builder: GreenNodeBuilder::new(),
-        }
+        };
+
+        tmp.parse()
     }
 
-    pub fn parse(mut self) -> ParseResult {
+    fn parse(mut self) -> ParseResult {
         self.start_node(Token::Root);
         self.finish_node();
 
@@ -27,38 +28,30 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn peek(&mut self) -> Option<Token> {
+    pub fn peek(&mut self) -> Option<Token> {
         self.lexer.peek().map(|(token, _)| *token)
     }
 
-    fn push(&mut self) {
+    pub fn push(&mut self) {
         let (token, raw) = self.lexer.next().unwrap();
 
         self.builder.token(token.into(), raw)
     }
 
-    fn start_node(&mut self, token: Token) {
+    pub fn start_node(&mut self, token: Token) {
         self.builder.start_node(token.into());
     }
 
-    fn finish_node(&mut self) {
+    pub fn start_node_at(&mut self, checkpoint: Checkpoint, token: Token) {
+        self.builder.start_node_at(checkpoint, token.into())
+    }
+
+    pub fn finish_node(&mut self) {
         self.builder.finish_node();
     }
-}
 
-pub struct ParseResult {
-    root: GreenNode,
-}
-
-impl fmt::Debug for ParseResult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let tmp = format!(
-            "{:#?}",
-            SyntaxNode::<SetaLanguage>::new_root(self.root.clone())
-        );
-        write!(f, "{}", &tmp[0..tmp.len() - 1]);
-
-        Ok(())
+    pub fn checkpoint(&self) -> Checkpoint {
+        self.builder.checkpoint()
     }
 }
 

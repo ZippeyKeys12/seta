@@ -1,7 +1,5 @@
-use crate::parser::SetaLanguage;
 use logos::{self, Logos};
 use num_derive::{FromPrimitive, ToPrimitive};
-use rowan::SyntaxKind;
 
 #[derive(Logos, Clone, Copy, Debug, FromPrimitive, PartialEq, ToPrimitive)]
 pub enum Token {
