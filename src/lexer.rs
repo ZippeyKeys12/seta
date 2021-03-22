@@ -87,6 +87,7 @@ pub enum Token {
 
     // For rowan
     Root,
+    BinaryOp,
 }
 
 pub struct Lexer<'a> {
@@ -116,7 +117,7 @@ impl<'a> Iterator for Lexer<'a> {
 mod tests {
     use super::{Lexer, Token};
 
-    fn test_complete(input: &str, token: Token) {
+    fn check(input: &str, token: Token) {
         let mut lexer = Lexer::new(input);
 
         assert_eq!(lexer.next(), Some((token, input)));
@@ -125,154 +126,154 @@ mod tests {
     // Keywords
     #[test]
     fn test_type() {
-        test_complete("type", Token::Type)
+        check("type", Token::Type)
     }
 
     #[test]
     fn test_fn() {
-        test_complete("fn", Token::Fn)
+        check("fn", Token::Fn)
     }
 
     // Symbols
 
     #[test]
     fn test_colon() {
-        test_complete(":", Token::Colon)
+        check(":", Token::Colon)
     }
 
     #[test]
     fn test_line_ending() {
-        test_complete("\n", Token::LineEnding);
-        test_complete(";", Token::LineEnding)
+        check("\n", Token::LineEnding);
+        check(";", Token::LineEnding)
     }
 
     // Pairs
 
     #[test]
     fn test_parens() {
-        test_complete("(", Token::LParen);
-        test_complete(")", Token::RParen);
+        check("(", Token::LParen);
+        check(")", Token::RParen);
     }
 
     #[test]
     fn test_brace() {
-        test_complete("{", Token::LBrace);
-        test_complete("}", Token::RBrace);
+        check("{", Token::LBrace);
+        check("}", Token::RBrace);
     }
 
     #[test]
     fn test_bracket() {
-        test_complete("[", Token::LBracket);
-        test_complete("]", Token::RBracket);
+        check("[", Token::LBracket);
+        check("]", Token::RBracket);
     }
 
     #[test]
     fn test_chevron() {
-        test_complete("<", Token::LChevron);
-        test_complete(">", Token::RChevron);
+        check("<", Token::LChevron);
+        check(">", Token::RChevron);
     }
 
     // Operators
     #[test]
     fn test_dot() {
-        test_complete(".", Token::DotOp)
+        check(".", Token::DotOp)
     }
 
     #[test]
     fn test_assign() {
-        test_complete("=", Token::AssignOp)
+        check("=", Token::AssignOp)
     }
 
     #[test]
     fn test_arrow() {
-        test_complete("->", Token::ArrowOp)
+        check("->", Token::ArrowOp)
     }
 
     // Boolean
 
     #[test]
     fn test_not() {
-        test_complete("not", Token::NotOp)
+        check("not", Token::NotOp)
     }
 
     #[test]
     fn test_lor() {
-        test_complete("or", Token::LogicalOrOp)
+        check("or", Token::LogicalOrOp)
     }
 
     #[test]
     fn test_land() {
-        test_complete("and", Token::LogicalAndOp)
+        check("and", Token::LogicalAndOp)
     }
 
     #[test]
     fn test_lxor() {
-        test_complete("xor", Token::LogicalXorOp)
+        check("xor", Token::LogicalXorOp)
     }
 
     #[test]
     fn test_equals() {
-        test_complete("==", Token::EqOp)
+        check("==", Token::EqOp)
     }
 
     #[test]
     fn test_nequals() {
-        test_complete("!=", Token::NotEqOp)
+        check("!=", Token::NotEqOp)
     }
 
     // Bitwise
 
     #[test]
     fn test_neg() {
-        test_complete("~", Token::BitwiseNegOp)
+        check("~", Token::BitwiseNegOp)
     }
 
     #[test]
     fn test_bor() {
-        test_complete("|", Token::BitwiseOrOp)
+        check("|", Token::BitwiseOrOp)
     }
 
     #[test]
     fn test_band() {
-        test_complete("&", Token::BitwiseAndOp)
+        check("&", Token::BitwiseAndOp)
     }
 
     #[test]
     fn test_bxor() {
-        test_complete("^", Token::BitwiseXorOp)
+        check("^", Token::BitwiseXorOp)
     }
 
     // Math
 
     #[test]
     fn test_add() {
-        test_complete("+", Token::AddOp)
+        check("+", Token::AddOp)
     }
 
     #[test]
     fn test_sub() {
-        test_complete("-", Token::SubOp)
+        check("-", Token::SubOp)
     }
 
     #[test]
     fn test_mul() {
-        test_complete("*", Token::MulOp)
+        check("*", Token::MulOp)
     }
 
     #[test]
     fn test_div() {
-        test_complete("/", Token::DivOp)
+        check("/", Token::DivOp)
     }
 
     //
 
     #[test]
     fn test_identifier() {
-        test_complete("asdadsdas02dsa", Token::Identifier);
+        check("asdadsdas02dsa", Token::Identifier);
     }
 
     #[test]
     fn test_spaces() {
-        test_complete("  	", Token::Whitespace);
+        check("  	", Token::Whitespace);
     }
 }

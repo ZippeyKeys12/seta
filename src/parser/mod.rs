@@ -1,5 +1,7 @@
 mod pratt;
 mod rowan;
+#[macro_use]
+mod types;
 
 pub use self::rowan::{Parser, SetaLanguage};
 use ::rowan::{GreenNode, SyntaxNode};
@@ -15,7 +17,7 @@ impl fmt::Debug for ParseResult {
             "{:#?}",
             SyntaxNode::<SetaLanguage>::new_root(self.root.clone())
         );
-        write!(f, "{}", &tmp[0..tmp.len() - 1]);
+        write!(f, "{}", &tmp[0..tmp.len() - 1])?;
 
         Ok(())
     }

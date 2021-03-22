@@ -7,14 +7,20 @@ use std::iter::Peekable;
 
 const MAX_PRECEDENCE: u8 = u8::max_value();
 
-trait PrattParser {
+pub trait PrattParser {
     type Op: PrattOp;
 
-    fn get_prefix(&self, token: Token) -> Option<Self::Op>;
-    fn get_mixfix(&self, token: Token) -> Option<Self::Op>;
+    fn get_prefix(&self, lexer: &mut Peekable<Lexer>) -> Option<Self::Op>;
+    fn get_mixfix(&self, lexer: &mut Peekable<Lexer>) -> Option<Self::Op>;
 
-    fn get_precedence(&self, token: Token) -> u8 {
-        let op = self.get_mixfix(token);
+    fn is_prefix(&self, lexer: &mut Peekable<Lexer>) -> bool {
+        self.get_prefix(lexer).is_some()
+    }
+    fn is_mixfix(&self, lexer: &mut Peekable<Lexer>) -> bool {
+        self.get_mixfix(lexer).is_some()
+    }
+    fn get_precedence(&self, lexer: &mut Peekable<Lexer>) -> u8 {
+        let op = self.get_mixfix(lexer);
 
         if let Some(op) = op {
             op.precedence()
@@ -22,52 +28,41 @@ trait PrattParser {
             u8::min_value()
         }
     }
-    fn get_associativity(&self, token: Token) -> PrattAssoc {
-        let op = self.get_mixfix(token).unwrap();
-        op.associativity()
-    }
 }
 
-trait PrattOp {
+pub trait PrattOp {
     fn precedence(&self) -> u8;
-    fn associativity(&self) -> PrattAssoc;
+    fn parse(&self, parser: &mut Parser, pratt: &dyn PrattParser<Op = Self>);
 }
 
-enum PrattAssoc {
-    Right,
-    Left,
+pub fn pratt_parse<Op>(parser: &mut Parser, pratt: &dyn PrattParser<Op = Op>)
+where
+    Op: PrattOp,
+{
+    pratt_parse_prec(parser, pratt, 1);
 }
 
-impl<'a> Parser<'a> {
-    fn pratt_parse<Op>(&mut self, pratt: &dyn PrattParser<Op = Op>)
-    where
-        Op: PrattOp,
-    {
-        self.pratt_parse_prec(pratt, 0);
-    }
+pub fn pratt_parse_prec<Op>(parser: &mut Parser, pratt: &dyn PrattParser<Op = Op>, precedence: u8)
+where
+    Op: PrattOp,
+{
+    let checkpoint = parser.checkpoint();
 
-    fn pratt_parse_prec<Op>(&mut self, pratt: &dyn PrattParser<Op = Op>, precedence: u8)
-    where
-        Op: PrattOp,
-    {
-        let checkpoint = self.checkpoint();
+    let op = pratt.get_prefix(&mut parser.lexer);
 
-        let op = pratt.get_prefix(self.peek().unwrap());
+    if let Some(_) = op {
+        parser.push();
 
-        if let Some(_) = op {
-            self.push();
+        while precedence < pratt.get_precedence(&mut parser.lexer) {
+            let mop = pratt.get_mixfix(&mut parser.lexer).unwrap();
+            parser.push();
 
-            let mut mop = self.peek().unwrap();
-            while precedence < pratt.get_precedence(mop) {
-                self.push();
-                self.start_node_at(checkpoint, mop);
-                match pratt.get_associativity(mop) {
-                    PrattAssoc::Right => self.pratt_parse_prec(pratt, precedence - 1),
-                    PrattAssoc::Left => self.pratt_parse_prec(pratt, precedence),
-                }
-                self.finish_node();
+            parser.start_node_at(checkpoint, Token::BinaryOp);
+            mop.parse(parser, pratt);
+            parser.finish_node();
 
-                mop = self.peek().unwrap();
+            if !pratt.is_mixfix(&mut parser.lexer) {
+                break;
             }
         }
     }
