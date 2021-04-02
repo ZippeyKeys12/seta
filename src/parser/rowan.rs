@@ -38,7 +38,11 @@ impl<'a> Parser<'a> {
     pub fn push(&mut self) {
         let (token, raw) = self.lexer.next().unwrap();
 
-        self.builder.token(token.into(), raw)
+        self.builder.token(token.into(), raw);
+
+        if self.peek() == Some(Token::Whitespace) {
+            self.push();
+        }
     }
 
     pub fn start_node(&mut self, token: Token) {

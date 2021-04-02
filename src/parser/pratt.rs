@@ -1,11 +1,10 @@
 use crate::{
     lexer::{Lexer, Token},
-    parser::{ParseResult, Parser},
+    parser::Parser,
 };
-use rowan::GreenNode;
 use std::iter::Peekable;
 
-const MAX_PRECEDENCE: u8 = u8::max_value();
+pub const MAX_PRECEDENCE: u8 = u8::max_value();
 
 pub trait PrattParser {
     type Op: PrattOp;
