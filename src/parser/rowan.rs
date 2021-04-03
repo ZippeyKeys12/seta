@@ -164,6 +164,26 @@ mod tests {
       Identifier@4..5 "C"
       BitwiseAndOp@5..6 "&"
       Identifier@6..7 "D""#,
+            );
+            check(
+                "A & B | C & D",
+                r#"Root@0..13
+  BinaryOp@0..13
+    BinaryOp@0..6
+      Identifier@0..1 "A"
+      Whitespace@1..2 " "
+      BitwiseAndOp@2..3 "&"
+      Whitespace@3..4 " "
+      Identifier@4..5 "B"
+      Whitespace@5..6 " "
+    BitwiseOrOp@6..7 "|"
+    Whitespace@7..8 " "
+    BinaryOp@8..13
+      Identifier@8..9 "C"
+      Whitespace@9..10 " "
+      BitwiseAndOp@10..11 "&"
+      Whitespace@11..12 " "
+      Identifier@12..13 "D""#,
             )
         }
     }
