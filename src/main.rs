@@ -2,6 +2,7 @@ extern crate anyhow;
 extern crate clap;
 extern crate logos;
 
+mod ast;
 mod cst;
 mod lexer;
 mod util;
