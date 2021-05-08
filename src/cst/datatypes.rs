@@ -53,7 +53,7 @@ impl PrattOp for TypeOperators {
         }
     }
 
-    fn parse(&self, parser: &mut Parser, pratt: &dyn PrattParser<Op = Self>) {
+    fn parse(&self, parser: &mut Parser, pratt: &impl PrattParser<Op = Self>) {
         pratt_parse_prec(parser, pratt, self.precedence() - 1)
     }
 }

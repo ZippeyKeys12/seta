@@ -1,7 +1,7 @@
 mod pratt;
 mod rowan;
 #[macro_use]
-mod types;
+mod datatypes;
 
 pub use self::rowan::{Parser, SetaLanguage};
 use ::rowan::{GreenNode, SyntaxNode};

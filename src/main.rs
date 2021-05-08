@@ -2,12 +2,12 @@ extern crate anyhow;
 extern crate clap;
 extern crate logos;
 
+mod cst;
 mod lexer;
-mod parser;
 mod util;
 
 use clap::{App, Arg, SubCommand};
-use parser::Parser;
+use cst::Parser;
 use std::{
     fs::File,
     io::{self, prelude::*, Write},

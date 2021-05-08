@@ -1,6 +1,6 @@
 use crate::{
+    cst::Parser,
     lexer::{Lexer, Token},
-    parser::Parser,
 };
 use std::iter::Peekable;
 
@@ -31,17 +31,17 @@ pub trait PrattParser {
 
 pub trait PrattOp {
     fn precedence(&self) -> u8;
-    fn parse(&self, parser: &mut Parser, pratt: &dyn PrattParser<Op = Self>);
+    fn parse(&self, parser: &mut Parser, pratt: &impl PrattParser<Op = Self>);
 }
 
-pub fn pratt_parse<Op>(parser: &mut Parser, pratt: &dyn PrattParser<Op = Op>)
+pub fn pratt_parse<Op>(parser: &mut Parser, pratt: &impl PrattParser<Op = Op>)
 where
     Op: PrattOp,
 {
     pratt_parse_prec(parser, pratt, 1);
 }
 
-pub fn pratt_parse_prec<Op>(parser: &mut Parser, pratt: &dyn PrattParser<Op = Op>, precedence: u8)
+pub fn pratt_parse_prec<Op>(parser: &mut Parser, pratt: &impl PrattParser<Op = Op>, precedence: u8)
 where
     Op: PrattOp,
 {
