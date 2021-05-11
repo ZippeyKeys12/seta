@@ -1,7 +1,8 @@
 use num_bigint::BigInt;
 use std::{
     cmp::{max, min},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
+    iter::FromIterator,
     ops::{BitAnd, BitOr, BitXor, Mul, Neg, Shr, Sub},
 };
 
@@ -16,7 +17,7 @@ pub enum DataTypeSort {
     Misc,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq)]
 pub enum DataType {
     // Primitive
     Int(IntDataType),
@@ -39,7 +40,7 @@ pub enum DataType {
     Bottom,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IntDataType {
     Unbound,
     UpperBound(BigInt),
@@ -93,15 +94,19 @@ impl DataType {
                 _ => -a.to_nnf(),
             },
             Self::Intersection(typs) => {
+                let mut tmp = Vec::new();
+                for typ in typs.into_iter().map(Self::to_nnf) {
+                    if typ == Self::Top || tmp.contains(&typ) {
+                        continue;
+                    }
+
+                    tmp.push(typ);
+                }
+                let typs = tmp;
+
                 if typs.is_empty() {
                     panic!("Empty intersection");
                 }
-
-                let typs: Vec<DataType> = typs
-                    .into_iter()
-                    .map(Self::to_nnf)
-                    .filter(|t| *t != Self::Top)
-                    .collect();
 
                 if typs.contains(&Self::Bottom) {
                     Self::Bottom
@@ -111,15 +116,19 @@ impl DataType {
             }
 
             Self::Union(typs) => {
+                let mut tmp = Vec::new();
+                for typ in typs.into_iter().map(Self::to_nnf) {
+                    if typ == Self::Bottom || tmp.contains(&typ) {
+                        continue;
+                    }
+
+                    tmp.push(typ);
+                }
+                let typs = tmp;
+
                 if typs.is_empty() {
                     panic!("Empty union");
                 }
-
-                let typs: Vec<DataType> = typs
-                    .into_iter()
-                    .map(Self::to_nnf)
-                    .filter(|t| *t != Self::Bottom)
-                    .collect();
 
                 if typs.contains(&Self::Top) {
                     Self::Top
@@ -158,11 +167,15 @@ impl DataType {
             Self::Complement(a) => a.to_dnf(),
             Self::Intersection(typs) => {
                 // Distribute Intersections
-                let mut typs: Vec<DataType> = typs
-                    .into_iter()
-                    .map(Self::to_dnf)
-                    .filter(|t| *t != Self::Top)
-                    .collect();
+                let mut tmp = Vec::new();
+                for typ in typs.into_iter().map(Self::to_dnf) {
+                    if typ == Self::Top || tmp.contains(&typ) {
+                        continue;
+                    }
+
+                    tmp.push(typ);
+                }
+                let mut typs = tmp;
 
                 if typs.is_empty() {
                     panic!("Empty union");
@@ -244,11 +257,15 @@ impl DataType {
                 }
             }
             Self::Intersection(typs) => {
-                let typs: Vec<_> = typs
-                    .into_iter()
-                    .map(Self::evaluate)
-                    .filter(|t| *t != Self::Top)
-                    .collect();
+                let mut tmp = Vec::new();
+                for typ in typs.into_iter().map(Self::evaluate) {
+                    if typ == Self::Top || tmp.contains(&typ) {
+                        continue;
+                    }
+
+                    tmp.push(typ);
+                }
+                let typs = tmp;
 
                 if typs.is_empty() {
                     panic!("Empty intersection");
@@ -433,11 +450,15 @@ impl DataType {
                 res
             }
             Self::Union(typs) => {
-                let typs: Vec<_> = typs
-                    .into_iter()
-                    .map(Self::evaluate)
-                    .filter(|t| *t != Self::Bottom)
-                    .collect();
+                let mut tmp = Vec::new();
+                for typ in typs.into_iter().map(Self::evaluate) {
+                    if typ == Self::Bottom || tmp.contains(&typ) {
+                        continue;
+                    }
+
+                    tmp.push(typ);
+                }
+                let typs = tmp;
 
                 if typs.is_empty() {
                     panic!("Empty union");
@@ -551,6 +572,44 @@ impl DataType {
     }
 }
 
+impl PartialEq for DataType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Primitive
+            (Self::Int(int_typ1), Self::Int(int_typ2)) => int_typ1 == int_typ2,
+            (Self::Function(a1, b1), Self::Function(a2, b2)) => a1 == a2 && b1 == b2,
+
+            // Algebraic
+            (Self::Tuple(typs1), Self::Tuple(typs2)) => typs1 == typs2,
+            (Self::Record(typs1), Self::Record(typs2)) => typs1 == typs2,
+            (Self::Variant(typs1), Self::Variant(typs2)) => typs1 == typs2,
+
+            // Set
+            (Self::Complement(a), Self::Complement(b)) => a == b,
+            (Self::Union(typs1), Self::Union(typs2)) => {
+                typs1.len() == typs2.len()
+                    && typs1.iter().all(|t| typs2.contains(t))
+                    && typs2.iter().all(|t| typs1.contains(t))
+            }
+            (Self::Intersection(typs1), Self::Intersection(typs2)) => {
+                typs1.len() == typs2.len()
+                    && typs1.iter().all(|t| typs2.contains(t))
+                    && typs2.iter().all(|t| typs1.contains(t))
+            }
+            (Self::Difference(a1, b1), Self::Difference(a2, b2)) => a1 == a2 && b1 == b2,
+            (Self::SymmetricDifference(a1, b1), Self::SymmetricDifference(a2, b2)) => {
+                a1 == a2 && b1 == b2
+            }
+
+            // Bounds
+            (Self::Top, Self::Top) | (Self::Bottom, Self::Bottom) => true,
+
+            // Else
+            _ => false,
+        }
+    }
+}
+
 // Primitive
 impl Shr for DataType {
     type Output = Self;
@@ -625,8 +684,20 @@ impl BitAnd for DataType {
 
     fn bitand(self, rhs: Self) -> Self::Output {
         match self {
-            Self::Intersection(typs) => Self::Intersection([typs, vec![rhs]].concat()),
-            _ => Self::Intersection(vec![self, rhs]),
+            Self::Intersection(typs) => {
+                if typs.contains(&rhs) {
+                    Self::Intersection(typs)
+                } else {
+                    Self::Intersection([typs, vec![rhs]].concat())
+                }
+            }
+            _ => {
+                if self == rhs {
+                    self
+                } else {
+                    Self::Intersection(vec![self, rhs])
+                }
+            }
         }
     }
 }
@@ -636,8 +707,20 @@ impl BitAnd<Box<DataType>> for DataType {
 
     fn bitand(self, rhs: Box<Self>) -> Self::Output {
         match self {
-            Self::Intersection(typs) => Self::Intersection([typs, vec![*rhs]].concat()),
-            _ => Self::Intersection(vec![self, *rhs]),
+            Self::Intersection(typs) => {
+                if typs.contains(&*rhs) {
+                    Self::Intersection(typs)
+                } else {
+                    Self::Intersection([typs, vec![*rhs]].concat())
+                }
+            }
+            _ => {
+                if self == *rhs {
+                    self
+                } else {
+                    Self::Intersection(vec![self, *rhs])
+                }
+            }
         }
     }
 }
@@ -647,8 +730,20 @@ impl BitAnd for Box<DataType> {
 
     fn bitand(self, rhs: Self) -> Self::Output {
         match *self {
-            DataType::Intersection(typs) => DataType::Intersection([typs, vec![*rhs]].concat()),
-            _ => DataType::Intersection(vec![*self, *rhs]),
+            DataType::Intersection(typs) => {
+                if typs.contains(&*rhs) {
+                    DataType::Intersection(typs)
+                } else {
+                    DataType::Intersection([typs, vec![*rhs]].concat())
+                }
+            }
+            _ => {
+                if self == rhs {
+                    *self
+                } else {
+                    DataType::Intersection(vec![*self, *rhs])
+                }
+            }
         }
     }
 }
@@ -658,8 +753,20 @@ impl BitAnd<DataType> for Box<DataType> {
 
     fn bitand(self, rhs: DataType) -> Self::Output {
         match *self {
-            DataType::Intersection(typs) => DataType::Intersection([typs, vec![rhs]].concat()),
-            _ => DataType::Intersection(vec![*self, rhs]),
+            DataType::Intersection(typs) => {
+                if typs.contains(&rhs) {
+                    DataType::Intersection(typs)
+                } else {
+                    DataType::Intersection([typs, vec![rhs]].concat())
+                }
+            }
+            _ => {
+                if *self == rhs {
+                    *self
+                } else {
+                    DataType::Intersection(vec![*self, rhs])
+                }
+            }
         }
     }
 }
@@ -669,8 +776,20 @@ impl BitOr for DataType {
 
     fn bitor(self, rhs: Self) -> Self::Output {
         match self {
-            Self::Union(typs) => Self::Union([typs, vec![rhs]].concat()),
-            _ => Self::Union(vec![self, rhs]),
+            Self::Union(typs) => {
+                if typs.contains(&rhs) {
+                    Self::Union(typs)
+                } else {
+                    Self::Union([typs, vec![rhs]].concat())
+                }
+            }
+            _ => {
+                if self == rhs {
+                    self
+                } else {
+                    Self::Union(vec![self, rhs])
+                }
+            }
         }
     }
 }
@@ -680,8 +799,20 @@ impl BitOr<Box<DataType>> for DataType {
 
     fn bitor(self, rhs: Box<Self>) -> Self::Output {
         match self {
-            Self::Union(typs) => Self::Union([typs, vec![*rhs]].concat()),
-            _ => Self::Union(vec![self, *rhs]),
+            Self::Union(typs) => {
+                if typs.contains(&*rhs) {
+                    Self::Union(typs)
+                } else {
+                    Self::Union([typs, vec![*rhs]].concat())
+                }
+            }
+            _ => {
+                if self == *rhs {
+                    self
+                } else {
+                    Self::Union(vec![self, *rhs])
+                }
+            }
         }
     }
 }
@@ -691,8 +822,20 @@ impl BitOr for Box<DataType> {
 
     fn bitor(self, rhs: Self) -> Self::Output {
         match *self {
-            DataType::Union(typs) => DataType::Union([typs, vec![*rhs]].concat()),
-            _ => DataType::Union(vec![*self, *rhs]),
+            DataType::Union(typs) => {
+                if typs.contains(&*rhs) {
+                    DataType::Union(typs)
+                } else {
+                    DataType::Union([typs, vec![*rhs]].concat())
+                }
+            }
+            _ => {
+                if self == rhs {
+                    *self
+                } else {
+                    DataType::Union(vec![*self, *rhs])
+                }
+            }
         }
     }
 }
@@ -702,8 +845,20 @@ impl BitOr<DataType> for Box<DataType> {
 
     fn bitor(self, rhs: DataType) -> Self::Output {
         match *self {
-            DataType::Union(typs) => DataType::Union([typs, vec![rhs]].concat()),
-            _ => DataType::Union(vec![*self, rhs]),
+            DataType::Union(typs) => {
+                if typs.contains(&rhs) {
+                    DataType::Union(typs)
+                } else {
+                    DataType::Union([typs, vec![rhs]].concat())
+                }
+            }
+            _ => {
+                if *self == rhs {
+                    *self
+                } else {
+                    DataType::Union(vec![*self, rhs])
+                }
+            }
         }
     }
 }
@@ -834,17 +989,17 @@ mod tests {
             DataType::Bottom,
         );
 
-        cmp_normalize(
-            (DataType::Int(IntDataType::Unbound) >> DataType::Int(IntDataType::Unbound))
-                & (DataType::Bottom >> DataType::Top),
-            DataType::Int(IntDataType::Unbound) >> DataType::Int(IntDataType::Unbound),
-        );
+        // cmp_normalize(
+        //     (DataType::Int(IntDataType::Unbound) >> DataType::Int(IntDataType::Unbound))
+        //         & (DataType::Bottom >> DataType::Top),
+        //     DataType::Int(IntDataType::Unbound) >> DataType::Int(IntDataType::Unbound),
+        // );
 
         cmp_normalize(
             (DataType::Int(IntDataType::Unbound) >> DataType::Tuple(Vec::new()))
                 & (DataType::Tuple(Vec::new()) >> DataType::Int(IntDataType::Unbound)),
-            DataType::Int(IntDataType::Unbound) >> DataType::Tuple(Vec::new())
-                & DataType::Tuple(Vec::new()) >> DataType::Int(IntDataType::Unbound),
+            (DataType::Int(IntDataType::Unbound) >> DataType::Tuple(Vec::new()))
+                & (DataType::Tuple(Vec::new()) >> DataType::Int(IntDataType::Unbound)),
         )
     }
 
