@@ -6,8 +6,9 @@ use std::{
     ops::{BitAnd, BitOr, BitXor, Mul, Neg, Shr, Sub},
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DataTypeSort {
+    Singleton(String),
     Int,
     Function,
     Tuple,
@@ -20,6 +21,7 @@ pub enum DataTypeSort {
 #[derive(Clone, Debug, Eq)]
 pub enum DataType {
     // Primitive
+    Singleton(String),
     Int(IntDataType),
     Function(Box<DataType>, Box<DataType>),
 
@@ -49,9 +51,14 @@ pub enum IntDataType {
 }
 
 impl DataType {
+    fn singleton(name: &str) -> Self {
+        DataType::Singleton(name.to_string())
+    }
+
     fn get_sort(&self) -> DataTypeSort {
         match self {
             // Primitive
+            Self::Singleton(name) => DataTypeSort::Singleton(name.clone()),
             Self::Int(_) => DataTypeSort::Int,
             Self::Function(_, _) => DataTypeSort::Function,
 
@@ -67,6 +74,7 @@ impl DataType {
             | Self::Difference(_, _)
             | Self::SymmetricDifference(_, _) => DataTypeSort::Set,
 
+            // Else
             _ => DataTypeSort::Misc,
         }
     }
@@ -293,7 +301,7 @@ impl DataType {
                                 (
                                     IntDataType::UpperBound(high1),
                                     IntDataType::UpperBound(high2),
-                                ) => Self::Int(IntDataType::LowerBound(min(high1, high2))),
+                                ) => Self::Int(IntDataType::UpperBound(min(high1, high2))),
                                 (IntDataType::LowerBound(low), IntDataType::UpperBound(high))
                                 | (IntDataType::UpperBound(high), IntDataType::LowerBound(low)) => {
                                     if low <= high {
@@ -405,21 +413,16 @@ impl DataType {
                         }
 
                         (Self::Variant(a), Self::Variant(b)) => {
-                            let mut map = a;
+                            let mut map = HashMap::new();
+                            let keys: Vec<_> = a
+                                .keys()
+                                .into_iter()
+                                .filter(|k| b.contains_key(*k))
+                                .cloned()
+                                .collect();
 
-                            for (k, v) in b {
-                                let v = v.evaluate();
-
-                                if map.contains_key(&k) {
-                                    if map[&k] == v {
-                                        continue;
-                                    } else {
-                                        let elem = (map[&k].clone() & v).evaluate();
-                                        map.insert(k, elem);
-                                    }
-                                } else {
-                                    map.insert(k, v);
-                                }
+                            for k in keys {
+                                map.insert(k.clone(), (a[&k].clone() & b[&k].clone()).evaluate());
                             }
 
                             Self::Variant(map)
@@ -576,6 +579,7 @@ impl PartialEq for DataType {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             // Primitive
+            (Self::Singleton(name1), Self::Singleton(name2)) => name1 == name2,
             (Self::Int(int_typ1), Self::Int(int_typ2)) => int_typ1 == int_typ2,
             (Self::Function(a1, b1), Self::Function(a2, b2)) => a1 == a2 && b1 == b2,
 
@@ -585,7 +589,7 @@ impl PartialEq for DataType {
             (Self::Variant(typs1), Self::Variant(typs2)) => typs1 == typs2,
 
             // Set
-            (Self::Complement(a), Self::Complement(b)) => a == b,
+            (Self::Complement(a), Self::Complement(b)) => *a == *b,
             (Self::Union(typs1), Self::Union(typs2)) => {
                 typs1.len() == typs2.len()
                     && typs1.iter().all(|t| typs2.contains(t))
@@ -596,7 +600,7 @@ impl PartialEq for DataType {
                     && typs1.iter().all(|t| typs2.contains(t))
                     && typs2.iter().all(|t| typs1.contains(t))
             }
-            (Self::Difference(a1, b1), Self::Difference(a2, b2)) => a1 == a2 && b1 == b2,
+            (Self::Difference(a1, b1), Self::Difference(a2, b2)) => *a1 == *a2 && *b1 == *b2,
             (Self::SymmetricDifference(a1, b1), Self::SymmetricDifference(a2, b2)) => {
                 a1 == a2 && b1 == b2
             }
@@ -929,6 +933,8 @@ impl BitXor<DataType> for Box<DataType> {
 
 #[cfg(test)]
 mod tests {
+    use num_bigint::ToBigInt;
+
     use super::{DataType, IntDataType};
 
     // #[test]
@@ -954,7 +960,7 @@ mod tests {
     }
 
     #[test]
-    fn test_intersection_normalize() {
+    fn test_normalize() {
         cmp_normalize(
             DataType::Bottom & DataType::Int(IntDataType::Unbound),
             DataType::Bottom,
@@ -1000,21 +1006,68 @@ mod tests {
                 & (DataType::Tuple(Vec::new()) >> DataType::Int(IntDataType::Unbound)),
             (DataType::Int(IntDataType::Unbound) >> DataType::Tuple(Vec::new()))
                 & (DataType::Tuple(Vec::new()) >> DataType::Int(IntDataType::Unbound)),
-        )
-    }
+        );
 
-    #[test]
-    fn test_union_normalize() {
+        cmp_normalize(
+            record! {
+                a: DataType::Int(IntDataType::Unbound),
+                b: DataType::Top
+            } & record! {
+                b: DataType::Int(IntDataType::Unbound),
+                c: DataType::Bottom
+            },
+            record! {
+                a: DataType::Int(IntDataType::Unbound),
+                b: DataType::Int(IntDataType::Unbound),
+                c: DataType::Bottom
+            },
+        );
+
+        cmp_normalize(
+            record! {
+                a: DataType::Top
+            } | variant! {
+                b: DataType::Top
+            },
+            variant! {
+                b: DataType::Top
+            } | record! {
+                a: DataType::Top
+            },
+        );
+
+        cmp_normalize(
+            ((record! {
+                a: DataType::Int(IntDataType::Unbound),
+                b: DataType::Top
+            } & record! {
+                b: DataType::Int(IntDataType::UpperBound(25.to_bigint().unwrap()))
+            }) | variant! {
+                a: DataType::Top,
+                b: DataType::Int(IntDataType::Unbound)
+            }) & (variant! {
+                b: DataType::Top,
+                c: DataType::Int(IntDataType::LowerBound(5.to_bigint().unwrap()))
+            } | record! {
+                b: DataType::Int(IntDataType::UpperBound(10.to_bigint().unwrap())),
+                c: DataType::Int(IntDataType::Unbound)
+            }),
+            record! {
+                a: DataType::Int(IntDataType::Unbound),
+                b: DataType::Int(IntDataType::UpperBound(10.to_bigint().unwrap())),
+                c: DataType::Int(IntDataType::Unbound)
+            } | variant! {
+                b: DataType::Int(IntDataType::Unbound)
+            },
+        );
+
         cmp_normalize(DataType::Top | DataType::Tuple(Vec::new()), DataType::Top);
 
         cmp_normalize(
             DataType::Bottom | DataType::Int(IntDataType::Unbound),
             DataType::Int(IntDataType::Unbound),
         );
-    }
 
-    #[test]
-    fn test_difference_normalize() {
         cmp_normalize(
             DataType::Bottom - DataType::Int(IntDataType::Unbound),
             DataType::Bottom,
@@ -1034,5 +1087,12 @@ mod tests {
             DataType::Int(IntDataType::Unbound) - DataType::Bottom,
             DataType::Int(IntDataType::Unbound),
         );
+
+        cmp_normalize(
+            (DataType::Top
+                & (DataType::Int(IntDataType::Unbound) >> DataType::Singleton("True".to_string())))
+                | DataType::Bottom,
+            DataType::Int(IntDataType::Unbound) >> DataType::Singleton("True".to_string()),
+        )
     }
 }
