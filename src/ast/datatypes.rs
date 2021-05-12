@@ -51,7 +51,10 @@ pub enum IntDataType {
 }
 
 impl DataType {
-    fn singleton(name: &str) -> Self {
+    pub fn singleton<T>(name: T) -> Self
+    where
+        T: ToString,
+    {
         DataType::Singleton(name.to_string())
     }
 
@@ -84,7 +87,7 @@ impl DataType {
             // Nove negation inwards
             Self::Complement(a) => match *a {
                 // Double Negation
-                Self::Complement(b) => *b,
+                Self::Complement(b) => -b,
 
                 // De Morgan's
                 Self::Intersection(typs) => {
@@ -116,7 +119,9 @@ impl DataType {
                     panic!("Empty intersection");
                 }
 
-                if typs.contains(&Self::Bottom) {
+                if typs.len() == 1 {
+                    typs[0].clone()
+                } else if typs.contains(&Self::Bottom) {
                     Self::Bottom
                 } else {
                     Self::Intersection(typs)
@@ -138,7 +143,9 @@ impl DataType {
                     panic!("Empty union");
                 }
 
-                if typs.contains(&Self::Top) {
+                if typs.len() == 1 {
+                    typs[0].clone()
+                } else if typs.contains(&Self::Top) {
                     Self::Top
                 } else {
                     Self::Union(typs)
@@ -172,7 +179,7 @@ impl DataType {
             }
 
             // Sets
-            Self::Complement(a) => a.to_dnf(),
+            Self::Complement(a) => -a.to_dnf(),
             Self::Intersection(typs) => {
                 // Distribute Intersections
                 let mut tmp = Vec::new();
@@ -189,7 +196,9 @@ impl DataType {
                     panic!("Empty union");
                 }
 
-                if typs.contains(&Self::Bottom) {
+                if typs.len() == 1 {
+                    return typs[0].clone();
+                } else if typs.contains(&Self::Bottom) {
                     return Self::Bottom;
                 }
 
@@ -261,7 +270,7 @@ impl DataType {
                 } else if a == Self::Bottom {
                     Self::Top
                 } else {
-                    self
+                    -a
                 }
             }
             Self::Intersection(typs) => {
@@ -277,6 +286,10 @@ impl DataType {
 
                 if typs.is_empty() {
                     panic!("Empty intersection");
+                }
+
+                if typs.len() == 1 {
+                    return typs[0].clone();
                 }
 
                 let sorts: Vec<_> = typs.iter().map(Self::get_sort).collect();
@@ -470,6 +483,9 @@ impl DataType {
                 if typs.contains(&Self::Top) {
                     return Self::Top;
                 }
+                if typs.len() == 1 {
+                    return typs[0].clone();
+                }
 
                 let mut res = typs[0].clone();
                 for typ in typs {
@@ -562,8 +578,25 @@ impl DataType {
 
                 res
             }
-            Self::Difference(a, b) => a.evaluate() - b.evaluate(),
-            Self::SymmetricDifference(a, b) => a.evaluate() ^ b.evaluate(),
+            Self::Difference(a, b) => {
+                let a = a.evaluate();
+                let b = b.evaluate();
+
+                if a == Self::Top {
+                    -b
+                } else if b == Self::Bottom {
+                    a
+                } else if a == Self::Bottom || b == Self::Top {
+                    Self::Bottom
+                } else {
+                    a.evaluate() & -b.evaluate()
+                }
+            }
+            Self::SymmetricDifference(a, b) => {
+                let a = a.evaluate();
+                let b = b.evaluate();
+                (a.clone() - b.clone()) | (b - a)
+            }
 
             // Else
             _ => self,
