@@ -1,4 +1,4 @@
 mod datatypes;
-mod smt;
+// mod smt;
 
-pub use datatypes::DataType;
+pub use datatypes::{DataType, IntDataType};

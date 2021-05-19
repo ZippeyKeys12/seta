@@ -1,22 +1,9 @@
 use num_bigint::BigInt;
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet},
-    iter::FromIterator,
-    ops::{BitAnd, BitOr, BitXor, Mul, Neg, Shr, Sub},
+    collections::HashMap,
+    ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Shr, Sub},
 };
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DataTypeSort {
-    Singleton(String),
-    Int,
-    Function,
-    Tuple,
-    Record,
-    Variant,
-    Set,
-    Misc,
-}
 
 #[derive(Clone, Debug, Eq)]
 pub enum DataType {
@@ -28,6 +15,7 @@ pub enum DataType {
     // Algebraic
     Tuple(Vec<DataType>),
     Record(HashMap<String, DataType>),
+    Sum(Vec<DataType>),
     Variant(HashMap<String, DataType>),
 
     // Set
@@ -58,34 +46,55 @@ impl DataType {
         DataType::Singleton(name.to_string())
     }
 
-    fn get_sort(&self) -> DataTypeSort {
-        match self {
+    fn subtype_of(&self, other: &Self) -> bool {
+        let this = self.clone().normalized();
+        let other = other.clone().normalized();
+
+        match (this, other) {
             // Primitive
-            Self::Singleton(name) => DataTypeSort::Singleton(name.clone()),
-            Self::Int(_) => DataTypeSort::Int,
-            Self::Function(_, _) => DataTypeSort::Function,
+            (Self::Singleton(a), Self::Singleton(b)) => a == b,
+            (Self::Int(int_typ1), Self::Int(int_typ2)) => match (int_typ1, int_typ2) {
+                (IntDataType::Unbound, IntDataType::Unbound)
+                | (IntDataType::LowerBound(_), IntDataType::Unbound)
+                | (IntDataType::UpperBound(_), IntDataType::Unbound)
+                | (IntDataType::BoundedRange(_, _), IntDataType::Unbound) => true,
+
+                (IntDataType::LowerBound(a), IntDataType::LowerBound(b))
+                | (IntDataType::BoundedRange(a, _), IntDataType::LowerBound(b)) => a >= b,
+                (IntDataType::UpperBound(a), IntDataType::UpperBound(b))
+                | (IntDataType::BoundedRange(_, a), IntDataType::UpperBound(b)) => a <= b,
+                (IntDataType::BoundedRange(a1, b1), IntDataType::BoundedRange(a2, b2)) => {
+                    a1 >= a2 && b1 <= b2
+                }
+
+                // Else
+                _ => false,
+            },
+            (Self::Function(a1, b1), Self::Function(a2, b2)) => {
+                a2.subtype_of(&a1) && b1.subtype_of(&b2)
+            }
 
             // Algebraic
-            Self::Tuple(_) => DataTypeSort::Tuple,
-            Self::Record(_) => DataTypeSort::Record,
-            Self::Variant(_) => DataTypeSort::Variant,
+            (Self::Tuple(a), Self::Tuple(b)) => {
+                if a.len() == b.len() {
+                    (0..a.len()).all(|i| a[i].subtype_of(&b[i]))
+                } else {
+                    false
+                }
+            }
 
-            // Set
-            Self::Complement(_)
-            | Self::Intersection(_)
-            | Self::Union(_)
-            | Self::Difference(_, _)
-            | Self::SymmetricDifference(_, _) => DataTypeSort::Set,
+            // Bounds
+            (Self::Bottom, _) | (_, Self::Top) => true,
 
             // Else
-            _ => DataTypeSort::Misc,
+            _ => false,
         }
     }
 
-    fn to_nnf(self) -> Self {
+    fn to_nnf(&self) -> Self {
         match self {
             // Nove negation inwards
-            Self::Complement(a) => match *a {
+            Self::Complement(a) => match *a.clone() {
                 // Double Negation
                 Self::Complement(b) => -b,
 
@@ -105,15 +114,14 @@ impl DataType {
                 _ => -a.to_nnf(),
             },
             Self::Intersection(typs) => {
-                let mut tmp = Vec::new();
-                for typ in typs.into_iter().map(Self::to_nnf) {
-                    if typ == Self::Top || tmp.contains(&typ) {
-                        continue;
-                    }
-
-                    tmp.push(typ);
+                let tmp = clean_intersection(typs, Self::to_nnf);
+                let tmp2: Vec<_>;
+                if let Self::Intersection(tmp) = tmp {
+                    tmp2 = tmp;
+                } else {
+                    return tmp;
                 }
-                let typs = tmp;
+                let typs = tmp2;
 
                 if typs.is_empty() {
                     panic!("Empty intersection");
@@ -129,15 +137,14 @@ impl DataType {
             }
 
             Self::Union(typs) => {
-                let mut tmp = Vec::new();
-                for typ in typs.into_iter().map(Self::to_nnf) {
-                    if typ == Self::Bottom || tmp.contains(&typ) {
-                        continue;
-                    }
-
-                    tmp.push(typ);
+                let tmp = clean_union(typs, Self::to_nnf);
+                let tmp2: Vec<_>;
+                if let Self::Union(tmp) = tmp {
+                    tmp2 = tmp;
+                } else {
+                    return tmp;
                 }
-                let typs = tmp;
+                let typs = tmp2;
 
                 if typs.is_empty() {
                     panic!("Empty union");
@@ -153,44 +160,47 @@ impl DataType {
             }
 
             // Eliminate differences and symmetric differences
-            Self::Difference(a, b) => (a & -b).to_nnf(),
+            Self::Difference(a, b) => (*a.clone() & -b.clone()).to_nnf(),
             Self::SymmetricDifference(a, b) => {
-                (a.clone() & -b.clone()).to_nnf() | (b & -a).to_nnf()
+                (a.clone() & -b.clone()).to_nnf() | (b.clone() & -a.clone()).to_nnf()
             }
 
             // Else
-            _ => self,
+            _ => self.clone(),
         }
     }
 
-    fn to_dnf(self) -> Self {
+    fn to_dnf(&self) -> Self {
         let this = self.to_nnf();
-        match this.clone() {
+        match &this {
             // Primitive
             Self::Function(a, b) => a.to_dnf() >> b.to_dnf(),
 
             // Algebraic
             Self::Tuple(typs) => Self::Tuple(typs.into_iter().map(Self::to_dnf).collect()),
-            Self::Record(typs) => {
-                Self::Record(typs.into_iter().map(|(n, t)| (n, t.to_dnf())).collect())
-            }
-            Self::Variant(typs) => {
-                Self::Variant(typs.into_iter().map(|(n, t)| (n, t.to_dnf())).collect())
-            }
+            Self::Record(typs) => Self::Record(
+                typs.into_iter()
+                    .map(|(n, t)| (n.clone(), t.to_dnf()))
+                    .collect(),
+            ),
+            Self::Variant(typs) => Self::Variant(
+                typs.into_iter()
+                    .map(|(n, t)| (n.clone(), t.to_dnf()))
+                    .collect(),
+            ),
 
             // Sets
             Self::Complement(a) => -a.to_dnf(),
             Self::Intersection(typs) => {
                 // Distribute Intersections
-                let mut tmp = Vec::new();
-                for typ in typs.into_iter().map(Self::to_dnf) {
-                    if typ == Self::Top || tmp.contains(&typ) {
-                        continue;
-                    }
-
-                    tmp.push(typ);
+                let tmp = clean_intersection(typs, Self::to_dnf);
+                let tmp2: Vec<_>;
+                if let Self::Intersection(tmp) = tmp {
+                    tmp2 = tmp;
+                } else {
+                    return tmp;
                 }
-                let mut typs = tmp;
+                let mut typs = tmp2;
 
                 if typs.is_empty() {
                     panic!("Empty union");
@@ -235,54 +245,75 @@ impl DataType {
         }
     }
 
-    fn evaluate(self) -> Self {
-        match self.clone() {
+    fn evaluate(&self) -> Self {
+        match self {
             // Primitive
             Self::Int(int_type) => match int_type {
                 IntDataType::BoundedRange(low, high) => {
                     if low > high {
                         Self::Bottom
                     } else {
-                        self
+                        self.clone()
                     }
                 }
 
                 // Else
-                _ => self,
+                _ => self.clone(),
             },
             Self::Function(a, b) => a.evaluate() >> b.evaluate(),
 
             // Algebraic
             Self::Tuple(typs) => Self::Tuple(typs.into_iter().map(Self::evaluate).collect()),
-            Self::Record(typs) => {
-                Self::Record(typs.into_iter().map(|(n, t)| (n, t.evaluate())).collect())
-            }
-            Self::Variant(typs) => {
-                Self::Variant(typs.into_iter().map(|(n, t)| (n, t.evaluate())).collect())
-            }
+            Self::Record(typs) => Self::Record(
+                typs.into_iter()
+                    .map(|(n, t)| (n.clone(), t.evaluate()))
+                    .collect(),
+            ),
+            Self::Variant(typs) => Self::Variant(
+                typs.into_iter()
+                    .map(|(n, t)| (n.clone(), t.evaluate()))
+                    .collect(),
+            ),
 
             // Set
             Self::Complement(a) => {
                 let a = a.evaluate();
 
-                if a == Self::Top {
-                    Self::Bottom
-                } else if a == Self::Bottom {
-                    Self::Top
-                } else {
-                    -a
+                match a {
+                    // Primitive
+                    Self::Int(a) => match a {
+                        IntDataType::Unbound => Self::Bottom,
+                        IntDataType::LowerBound(a) => Self::Int(IntDataType::UpperBound(a - 1)),
+                        IntDataType::UpperBound(a) => Self::Int(IntDataType::LowerBound(a + 1)),
+                        IntDataType::BoundedRange(a, b) => {
+                            Self::Int(IntDataType::UpperBound(a - 1))
+                                | Self::Int(IntDataType::LowerBound(b + 1))
+                        }
+                    },
+
+                    // Set
+                    Self::Complement(a) => *a,
+
+                    // Bounds
+                    Self::Top => Self::Bottom,
+                    Self::Bottom => Self::Top,
+
+                    // Else
+                    _ => -a,
                 }
             }
             Self::Intersection(typs) => {
-                let mut tmp = Vec::new();
-                for typ in typs.into_iter().map(Self::evaluate) {
-                    if typ == Self::Top || tmp.contains(&typ) {
-                        continue;
-                    }
-
-                    tmp.push(typ);
+                let tmp = clean_intersection(typs, Self::evaluate);
+                let tmp2: Vec<_>;
+                if let Self::Intersection(tmp) = tmp {
+                    tmp2 = tmp;
+                } else {
+                    return tmp;
                 }
-                let typs = tmp;
+                if tmp2.is_empty() {
+                    println!("{:?}", typs);
+                }
+                let typs = tmp2;
 
                 if typs.is_empty() {
                     panic!("Empty intersection");
@@ -292,10 +323,7 @@ impl DataType {
                     return typs[0].clone();
                 }
 
-                let sorts: Vec<_> = typs.iter().map(Self::get_sort).collect();
-
-                let first = typs[0].get_sort();
-                if typs.contains(&Self::Bottom) || !sorts.iter().all(|s| *s == first) {
+                if typs.contains(&Self::Bottom) {
                     return Self::Bottom;
                 }
 
@@ -303,6 +331,26 @@ impl DataType {
                 for typ in typs {
                     res = match (res.clone(), typ.clone()) {
                         // Primitive
+                        (Self::Singleton(a), Self::Singleton(b)) => {
+                            if a == b {
+                                Self::Singleton(a)
+                            } else {
+                                return Self::Bottom;
+                            }
+                        }
+                        (Self::Singleton(x), Self::Complement(a))
+                        | (Self::Complement(a), Self::Singleton(x)) => {
+                            if let Self::Singleton(y) = *a {
+                                if x == y {
+                                    return Self::Bottom;
+                                } else {
+                                    Self::Singleton(x)
+                                }
+                            } else {
+                                Self::Singleton(x)
+                            }
+                        }
+
                         (Self::Int(int_type1), Self::Int(int_type2)) => {
                             match (int_type1, int_type2) {
                                 (IntDataType::Unbound, a) | (a, IntDataType::Unbound) => {
@@ -320,7 +368,7 @@ impl DataType {
                                     if low <= high {
                                         Self::Int(IntDataType::BoundedRange(low, high))
                                     } else {
-                                        Self::Bottom
+                                        return Self::Bottom;
                                     }
                                 }
                                 (
@@ -333,7 +381,7 @@ impl DataType {
                                     if low <= high {
                                         Self::Int(IntDataType::BoundedRange(low, high))
                                     } else {
-                                        Self::Bottom
+                                        return Self::Bottom;
                                     }
                                 }
                                 (
@@ -349,7 +397,7 @@ impl DataType {
                                     if low <= high {
                                         Self::Int(IntDataType::BoundedRange(low, high))
                                     } else {
-                                        Self::Bottom
+                                        return Self::Bottom;
                                     }
                                 }
                                 (
@@ -365,16 +413,24 @@ impl DataType {
                                     if low <= high {
                                         Self::Int(IntDataType::BoundedRange(low, high))
                                     } else {
-                                        Self::Bottom
+                                        return Self::Bottom;
                                     }
                                 }
+                            }
+                        }
+                        (Self::Int(x), Self::Complement(a))
+                        | (Self::Complement(a), Self::Int(x)) => {
+                            if let Self::Int(_) = *a {
+                                res & typ
+                            } else {
+                                Self::Int(x)
                             }
                         }
 
                         // Algebraic
                         (Self::Tuple(a), Self::Tuple(b)) => {
                             if a == b {
-                                Self::Tuple(a.into_iter().map(Self::evaluate).collect())
+                                Self::Tuple(a.iter().map(Self::evaluate).collect())
                             } else if a.len() == b.len() {
                                 let mut elems = Vec::with_capacity(a.len());
 
@@ -394,12 +450,20 @@ impl DataType {
 
                                 Self::Tuple(elems)
                             } else {
-                                Self::Bottom
+                                return Self::Bottom;
                             }
                         }
-                        (Self::Tuple(_), Self::Record(_)) | (Self::Tuple(_), Self::Variant(_)) => {
-                            Self::Bottom
+                        (Self::Tuple(x), Self::Complement(a))
+                        | (Self::Complement(a), Self::Tuple(x)) => {
+                            if let Self::Tuple(_) = *a {
+                                res & typ
+                            } else {
+                                Self::Tuple(x)
+                            }
                         }
+                        (Self::Tuple(_), Self::Record(_))
+                        | (Self::Tuple(_), Self::Sum(_))
+                        | (Self::Tuple(_), Self::Variant(_)) => return Self::Bottom,
 
                         (Self::Record(a), Self::Record(b)) => {
                             let mut map = a;
@@ -421,9 +485,67 @@ impl DataType {
 
                             Self::Record(map)
                         }
-                        (Self::Record(_), Self::Tuple(_)) | (Self::Record(_), Self::Variant(_)) => {
-                            Self::Bottom
+                        (Self::Record(x), Self::Complement(a))
+                        | (Self::Complement(a), Self::Record(x)) => {
+                            if let Self::Record(_) = *a {
+                                res & typ
+                            } else {
+                                Self::Record(x)
+                            }
                         }
+                        (Self::Record(_), Self::Tuple(_))
+                        | (Self::Record(_), Self::Sum(_))
+                        | (Self::Record(_), Self::Variant(_)) => return Self::Bottom,
+
+                        (Self::Sum(a), Self::Sum(b)) => {
+                            if a == b {
+                                Self::Sum(a.iter().map(Self::evaluate).collect())
+                            } else {
+                                let mut elems = Vec::with_capacity(a.len());
+
+                                // Make sum with less options first
+                                let mut a = a;
+                                let mut b = b;
+                                if a.len() > b.len() {
+                                    let tmp = a;
+                                    a = b;
+                                    b = tmp;
+                                }
+                                let a = a;
+                                let b = b;
+
+                                // Combine options
+                                for (v1, v2) in Iterator::zip(a.iter().cloned(), b.iter().cloned())
+                                {
+                                    let v1 = v1.evaluate();
+                                    let v2 = v2.evaluate();
+
+                                    if v1 != v2 {
+                                        let elem = (v1 & v2).evaluate();
+                                        elems.push(elem);
+                                    } else {
+                                        elems.push(v1);
+                                    }
+                                }
+
+                                for v in &b[a.len()..] {
+                                    elems.push(v.evaluate());
+                                }
+
+                                Self::Sum(elems)
+                            }
+                        }
+                        (Self::Sum(x), Self::Complement(a))
+                        | (Self::Complement(a), Self::Sum(x)) => {
+                            if let Self::Sum(_) = *a {
+                                res & typ
+                            } else {
+                                Self::Sum(x)
+                            }
+                        }
+                        (Self::Sum(_), Self::Tuple(_))
+                        | (Self::Sum(_), Self::Record(_))
+                        | (Self::Sum(_), Self::Variant(_)) => return Self::Bottom,
 
                         (Self::Variant(a), Self::Variant(b)) => {
                             let mut map = HashMap::new();
@@ -440,15 +562,26 @@ impl DataType {
 
                             Self::Variant(map)
                         }
+                        (Self::Variant(x), Self::Complement(a))
+                        | (Self::Complement(a), Self::Variant(x)) => {
+                            if let Self::Variant(_) = *a {
+                                res & typ
+                            } else {
+                                Self::Variant(x)
+                            }
+                        }
                         (Self::Variant(_), Self::Tuple(_))
-                        | (Self::Variant(_), Self::Record(_)) => Self::Bottom,
+                        | (Self::Variant(_), Self::Sum(_))
+                        | (Self::Variant(_), Self::Record(_)) => return Self::Bottom,
 
                         // Set
                         (a, Self::Complement(b)) | (Self::Complement(b), a) => {
-                            if a == *b {
+                            let a = a.evaluate();
+                            let b = b.evaluate();
+                            if a == b {
                                 Self::Bottom
-                            } else if (a.clone() & b.clone()).normalize() == Self::Bottom {
-                                a
+                            // } else if (a.clone() & b.clone()).normalized() == Self::Bottom {
+                            //     a
                             } else {
                                 a & -b
                             }
@@ -456,7 +589,7 @@ impl DataType {
 
                         // Bounds
                         (Self::Top, c) | (c, Self::Top) => c,
-                        (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
+                        (Self::Bottom, _) | (_, Self::Bottom) => return Self::Bottom,
 
                         // Else
                         _ => res & typ,
@@ -466,15 +599,14 @@ impl DataType {
                 res
             }
             Self::Union(typs) => {
-                let mut tmp = Vec::new();
-                for typ in typs.into_iter().map(Self::evaluate) {
-                    if typ == Self::Bottom || tmp.contains(&typ) {
-                        continue;
-                    }
-
-                    tmp.push(typ);
+                let tmp = clean_union(typs, Self::evaluate);
+                let tmp2: Vec<_>;
+                if let Self::Union(tmp) = tmp {
+                    tmp2 = tmp;
+                } else {
+                    return tmp;
                 }
-                let typs = tmp;
+                let typs = tmp2;
 
                 if typs.is_empty() {
                     panic!("Empty union");
@@ -558,10 +690,12 @@ impl DataType {
 
                         // Set
                         (a, Self::Complement(b)) | (Self::Complement(b), a) => {
-                            if a.clone().normalize() == b.clone().normalize() {
+                            let a = a.evaluate();
+                            let b = b.evaluate();
+                            if a == b {
                                 Self::Top
-                            } else if (a.clone() & b.clone()).normalize() == Self::Bottom {
-                                -b
+                            // } else if (a.clone() & b.clone()).normalized() == Self::Bottom {
+                            //     -b
                             } else {
                                 a | -b
                             }
@@ -599,12 +733,12 @@ impl DataType {
             }
 
             // Else
-            _ => self,
+            _ => self.clone(),
         }
     }
 
-    fn normalize(self) -> Self {
-        self.evaluate().to_nnf().to_dnf().evaluate()
+    fn normalized(&self) -> Self {
+        self.evaluate().to_dnf().evaluate()
     }
 }
 
@@ -617,24 +751,22 @@ impl PartialEq for DataType {
             (Self::Function(a1, b1), Self::Function(a2, b2)) => a1 == a2 && b1 == b2,
 
             // Algebraic
-            (Self::Tuple(typs1), Self::Tuple(typs2)) => typs1 == typs2,
-            (Self::Record(typs1), Self::Record(typs2)) => typs1 == typs2,
-            (Self::Variant(typs1), Self::Variant(typs2)) => typs1 == typs2,
+            (Self::Tuple(typs1), Self::Tuple(typs2)) | (Self::Sum(typs1), Self::Sum(typs2)) => {
+                typs1 == typs2
+            }
+            (Self::Record(typs1), Self::Record(typs2))
+            | (Self::Variant(typs1), Self::Variant(typs2)) => typs1 == typs2,
 
             // Set
             (Self::Complement(a), Self::Complement(b)) => *a == *b,
-            (Self::Union(typs1), Self::Union(typs2)) => {
+            (Self::Union(typs1), Self::Union(typs2))
+            | (Self::Intersection(typs1), Self::Intersection(typs2)) => {
                 typs1.len() == typs2.len()
                     && typs1.iter().all(|t| typs2.contains(t))
                     && typs2.iter().all(|t| typs1.contains(t))
             }
-            (Self::Intersection(typs1), Self::Intersection(typs2)) => {
-                typs1.len() == typs2.len()
-                    && typs1.iter().all(|t| typs2.contains(t))
-                    && typs2.iter().all(|t| typs1.contains(t))
-            }
-            (Self::Difference(a1, b1), Self::Difference(a2, b2)) => *a1 == *a2 && *b1 == *b2,
-            (Self::SymmetricDifference(a1, b1), Self::SymmetricDifference(a2, b2)) => {
+            (Self::Difference(a1, b1), Self::Difference(a2, b2))
+            | (Self::SymmetricDifference(a1, b1), Self::SymmetricDifference(a2, b2)) => {
                 a1 == a2 && b1 == b2
             }
 
@@ -644,6 +776,72 @@ impl PartialEq for DataType {
             // Else
             _ => false,
         }
+    }
+}
+
+fn clean_intersection(typs: &Vec<DataType>, func: fn(&DataType) -> DataType) -> DataType {
+    let mut tmp = Vec::new();
+    let typs: Vec<_> = typs.into_iter().map(func).collect();
+    for typ in &typs {
+        if typ == &DataType::Top || tmp.contains(typ) {
+            continue;
+        }
+
+        if typ == &DataType::Bottom {
+            return DataType::Bottom;
+        }
+
+        if let DataType::Complement(a) = typ {
+            if tmp.contains(&**a) {
+                return DataType::Bottom;
+            }
+        }
+
+        if let DataType::Intersection(typs2) = typ {
+            let mut typs2 = typs2.clone();
+            tmp.append(&mut typs2);
+        } else {
+            tmp.push(typ.clone());
+        }
+    }
+
+    if tmp.len() == 1 {
+        tmp[0].clone()
+    } else {
+        DataType::Intersection(tmp)
+    }
+}
+
+fn clean_union(typs: &Vec<DataType>, func: fn(&DataType) -> DataType) -> DataType {
+    let mut tmp = Vec::new();
+    let typs: Vec<_> = typs.into_iter().map(func).collect();
+    for typ in &typs {
+        if typ == &DataType::Bottom || tmp.contains(typ) {
+            continue;
+        }
+
+        if typ == &DataType::Top {
+            return DataType::Top;
+        }
+
+        if let DataType::Complement(a) = typ {
+            if tmp.contains(&**a) {
+                return DataType::Top;
+            }
+        }
+
+        if let DataType::Union(typs2) = typ {
+            let mut typs2 = typs2.clone();
+            tmp.append(&mut typs2);
+        } else {
+            tmp.push(typ.clone());
+        }
+    }
+
+    if tmp.len() == 1 {
+        tmp[0].clone()
+    } else {
+        DataType::Union(tmp)
     }
 }
 
@@ -679,6 +877,72 @@ impl Mul for DataType {
     }
 }
 
+impl Mul<Box<DataType>> for DataType {
+    type Output = Self;
+
+    fn mul(self, rhs: Box<Self>) -> Self::Output {
+        let mut elems = Vec::new();
+
+        if let Self::Tuple(elems1) = self {
+            elems.append(&mut elems1.clone())
+        } else {
+            elems.push(self)
+        }
+
+        if let Self::Tuple(elems2) = *rhs {
+            elems.append(&mut elems2.clone())
+        } else {
+            elems.push(*rhs)
+        }
+
+        Self::Tuple(elems)
+    }
+}
+
+impl Mul for Box<DataType> {
+    type Output = DataType;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let mut elems = Vec::new();
+
+        if let DataType::Tuple(elems1) = *self {
+            elems.append(&mut elems1.clone())
+        } else {
+            elems.push(*self)
+        }
+
+        if let DataType::Tuple(elems2) = *rhs {
+            elems.append(&mut elems2.clone())
+        } else {
+            elems.push(*rhs)
+        }
+
+        DataType::Tuple(elems)
+    }
+}
+
+impl Mul<DataType> for Box<DataType> {
+    type Output = DataType;
+
+    fn mul(self, rhs: DataType) -> Self::Output {
+        let mut elems = Vec::new();
+
+        if let DataType::Tuple(elems1) = *self {
+            elems.append(&mut elems1.clone())
+        } else {
+            elems.push(*self)
+        }
+
+        if let DataType::Tuple(elems2) = rhs {
+            elems.append(&mut elems2.clone())
+        } else {
+            elems.push(rhs)
+        }
+
+        DataType::Tuple(elems)
+    }
+}
+
 #[macro_export(inner_local_macros)]
 macro_rules! record {
     ( $($name:ident : $typ:expr),* ) => {{
@@ -687,6 +951,101 @@ macro_rules! record {
         $(map.insert(stringify!($name).to_string(), $typ);)*
         $crate::ast::DataType::Record(map)
     }};
+}
+
+impl Add for DataType {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut elems = Vec::new();
+
+        if let Self::Sum(elems1) = self {
+            elems.append(&mut elems1.clone())
+        } else {
+            elems.push(self)
+        }
+
+        if let Self::Sum(elems2) = rhs {
+            elems.append(&mut elems2.clone())
+        } else {
+            elems.push(rhs)
+        }
+
+        // elems.iter().for_each(|t| {
+        //     let t = t.normalized();
+        //     elems
+        //         .iter()
+        //         .for_each(|t2| assert_eq!(Self::Bottom, (t.clone() & t2.normalized()).normalized()))
+        // });
+
+        Self::Sum(elems)
+    }
+}
+
+impl Add<Box<DataType>> for DataType {
+    type Output = Self;
+
+    fn add(self, rhs: Box<Self>) -> Self::Output {
+        let mut elems = Vec::new();
+
+        if let Self::Sum(elems1) = self {
+            elems.append(&mut elems1.clone())
+        } else {
+            elems.push(self)
+        }
+
+        if let Self::Sum(elems2) = *rhs {
+            elems.append(&mut elems2.clone())
+        } else {
+            elems.push(*rhs)
+        }
+
+        Self::Sum(elems)
+    }
+}
+
+impl Add for Box<DataType> {
+    type Output = DataType;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut elems = Vec::new();
+
+        if let DataType::Sum(elems1) = *self {
+            elems.append(&mut elems1.clone())
+        } else {
+            elems.push(*self)
+        }
+
+        if let DataType::Sum(elems2) = *rhs {
+            elems.append(&mut elems2.clone())
+        } else {
+            elems.push(*rhs)
+        }
+
+        DataType::Sum(elems)
+    }
+}
+
+impl Add<DataType> for Box<DataType> {
+    type Output = DataType;
+
+    fn add(self, rhs: DataType) -> Self::Output {
+        let mut elems = Vec::new();
+
+        if let DataType::Sum(elems1) = *self {
+            elems.append(&mut elems1.clone())
+        } else {
+            elems.push(*self)
+        }
+
+        if let DataType::Sum(elems2) = rhs {
+            elems.append(&mut elems2.clone())
+        } else {
+            elems.push(rhs)
+        }
+
+        DataType::Sum(elems)
+    }
 }
 
 #[macro_export(inner_local_macros)]
@@ -989,7 +1348,7 @@ mod tests {
     // }
 
     fn cmp_normalize(actual: DataType, expected: DataType) {
-        assert_eq!(actual.normalize(), expected)
+        assert_eq!(actual.normalized(), expected)
     }
 
     #[test]
@@ -1126,6 +1485,24 @@ mod tests {
                 & (DataType::Int(IntDataType::Unbound) >> DataType::Singleton("True".to_string())))
                 | DataType::Bottom,
             DataType::Int(IntDataType::Unbound) >> DataType::Singleton("True".to_string()),
-        )
+        );
+
+        cmp_normalize(
+            record! {
+                a: DataType::Int(IntDataType::Unbound)
+            } | ((DataType::singleton("True")
+                | (record! {
+                    a: DataType::Int(IntDataType::LowerBound(10.to_bigint().unwrap()))
+                } & record! {
+                    a: DataType::Int(IntDataType::UpperBound(100.to_bigint().unwrap()))
+                })
+                | DataType::singleton("Null")
+                | DataType::singleton("False"))
+                - DataType::singleton("Null")),
+            record! {
+                a: DataType::Int(IntDataType::Unbound)
+            } | DataType::singleton("True")
+                | DataType::singleton("False"),
+        );
     }
 }
